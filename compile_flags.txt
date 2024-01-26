@@ -1,0 +1,5 @@
+-W 
+-Wall 
+-Wextra 
+-g3 
+-Iinclude
