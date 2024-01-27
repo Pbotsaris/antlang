@@ -1,10 +1,7 @@
-#include <stdio.h>
-
 #include "chunk.h"
 #include "debug.h"
 
 int main(void) {
-
   Chunk chunk;
 
   init_chunk(&chunk);
@@ -12,16 +9,16 @@ int main(void) {
   write_chunk(&chunk, OP_RETURN, 10);
   write_chunk(&chunk, OP_RETURN, 10);
 
-  uint8_t const_index = add_constant(&chunk, 2.2);
-  write_chunk(&chunk, OP_CONSTANT, 20);
-  write_chunk(&chunk, const_index, 20);
+  write_constant(&chunk, 30.5, 20);
+  write_constant(&chunk, 23.5, 20);
 
   write_chunk(&chunk, OP_RETURN, 80);
   write_chunk(&chunk, OP_RETURN, 80);
   write_chunk(&chunk, OP_RETURN, 80);
 
-  printf("Chunk count: %d\n", chunk.count);
-  printf("Chunk capacity: %d\n", chunk.capacity);
+ for(int i = 0; i < 260; i++) {
+    write_constant(&chunk, 40.1+i, 81+i);
+  }
 
   disassemble_chunk(&chunk, "test chunk");
   free_chunk(&chunk);

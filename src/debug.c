@@ -24,7 +24,6 @@ static int disassemble_instruction(Chunk *chunk, int offset) {
 
   bool same_line =
       offset > 0 && chunk_line == get_line(&chunk->lines, offset - 1);
-  
 
   if (same_line)
     printf("   | ");
@@ -40,6 +39,9 @@ static int disassemble_instruction(Chunk *chunk, int offset) {
   case OP_CONSTANT:
     return print_constant_instruction("OP_CONSTANT", chunk, offset);
 
+  case OP_CONSTANT_LONG:
+    return print_constant_instruction("OP_CONSTANT_LONG", chunk, offset);
+
   default:
     printf("Unknown opcode '%d'\n", instruction);
     return offset + 1;
@@ -51,13 +53,32 @@ static int print_instruction(const char *name, int offset) {
   return offset + 1;
 }
 
-static int print_constant_instruction(const char *name, Chunk *chunk,
-                                      int offset) {
+static int print_constant_instruction(const char *name, Chunk *chunk, int offset) {
 
-  /* print constant index (in values array) and the value */
-  uint8_t const_index = chunk->code[offset + 1];
+  int32_t const_index    = 0;
+  int32_t operand_offset = 0;
+
+  /* putting 24 bits together to get the constant index */
+  if (chunk->code[offset] == OP_CONSTANT_LONG) {
+    const_index = chunk->code[offset + 3]; // highest byte first then we shift...
+    const_index = (const_index << 8) | chunk->code[offset + 2]; 
+    const_index = (const_index << 8) | chunk->code[offset + 1];
+    operand_offset = 4; // 1 opcode + 3 operands
+
+  } else {
+    const_index = (int32_t)chunk->code[offset + 1];
+    operand_offset = 2; // 1 opcode + 1 operand
+  }
+
+  /* index:value */
   printf("%-16s %4d:", name, const_index);
+
+  if(const_index >= chunk->constants.count) {
+    printf("Unknown constant index '%d'\n", const_index);
+    return offset + operand_offset;
+  }
+
   print_value(chunk->constants.values[const_index]);
 
-  return offset + 2;
+  return offset + operand_offset;
 }
