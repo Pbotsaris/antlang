@@ -4,8 +4,6 @@
 #include "lines.h"
 #include "values.h"
 
-#define MAX_8BIT_VALUE 256
-
 typedef enum {
   OP_RETURN,        /* no operand */
   OP_CONSTANT,      /* 8-bit operand */

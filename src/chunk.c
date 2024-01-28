@@ -2,6 +2,7 @@
 
 #include "chunk.h"
 #include "memory.h"
+#include "config.h"
 
 static void init_chunk(Chunk *chunk);
 static void write_chunk(Chunk *chunk, uint8_t byte, int32_t line);
@@ -54,7 +55,7 @@ static void write_constant(Chunk *chunk, Value constant, int32_t line) {
   ant_values.write(&chunk->constants, constant);
 
   /* if we can get away with 8bits, use the more efficient OP_CONSTANT */
-  if (constant_index < MAX_8BIT_VALUE) {
+  if (constant_index < CONST_MAX_8BITS_VALUE) {
     write_chunk(chunk, OP_CONSTANT, line);
     write_chunk(chunk, constant_index, line);
     return;

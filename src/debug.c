@@ -2,6 +2,7 @@
 #include "lines.h"
 #include "values.h"
 #include "utils.h"
+#include "config.h"
 
 #include <stdio.h>
 
@@ -62,12 +63,12 @@ static int print_constant_instruction(const char *name, Chunk *chunk, int offset
   /* putting 24 bits together to get the constant index */
   if (chunk->code[offset] == OP_CONSTANT_LONG) {
     uint8_t *operand_bytes = chunk->code + offset + 1;
-    const_index = ant_utils.unpack_int32(operand_bytes, 3);
-    operand_offset = 4; // 1 opcode + 3 operands
+    const_index = ant_utils.unpack_int32(operand_bytes, CONST_24BITS);
+    operand_offset = 1 + CONST_24BITS; // 1 opcode + 3 operands
 
   } else {
     const_index = (int32_t)chunk->code[offset + 1];
-    operand_offset = 2; // 1 opcode + 1 operand
+    operand_offset = 1 + CONST_8BITS; // 1 opcode + 1 operand
   }
 
   /* index:value */

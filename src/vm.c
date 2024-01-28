@@ -3,6 +3,7 @@
 #include "utils.h"
 #include "values.h"
 #include "chunk.h"
+#include "config.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -63,11 +64,11 @@ static InterpretResult run(VM *vm) {
 
     case OP_CONSTANT_LONG: {
       uint8_t *bytes = vm->ip;
-      Value constant = ant_utils.unpack_int32(bytes, 3);
+      Value constant = ant_utils.unpack_int32(bytes, CONST_24BITS);
+      vm->ip += CONST_24BITS;
+
       ant_values.print(constant);
       printf("\n");
-
-      vm->ip += 3;
       break;
     }
     }

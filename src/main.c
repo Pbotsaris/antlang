@@ -5,10 +5,9 @@
 int main(void) {
 
   VM *vm = ant_vm.new();
+
   Chunk chunk;
-
   ant_chunk.init(&chunk);
-
   ant_chunk.write_constant(&chunk, 30.5, 20);
 
   for(int i = 0; i < 300; i++){
