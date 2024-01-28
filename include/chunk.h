@@ -35,10 +35,11 @@ typedef struct AntChunk {
   void (*init)(Chunk *chunk);
 
   /**
-   * @brief Write a byte to the chunk
+   * @brief Write a byte to the chunk, dynamically growing the array if needed.
    * @param chunk chunk to write to
    * @param byte byte to write
    * @param line line number of the byte
+   * @details This function will automatically resize the internal array of instructions if the capacity is exceeded.
    */
   void (*write)(Chunk *chunk, uint8_t byte, int32_t line);
 
@@ -46,7 +47,7 @@ typedef struct AntChunk {
    * @brief free a byte to the chunk
    * @param chunk the chunk to free
    */
-  void (*free_chunk)(Chunk *chunk);
+  void (*free)(Chunk *chunk);
 
   /**
    * @brief  writes a constant (OP_CONTANT or OP_CONSTANT_LONG) value to the chunk.

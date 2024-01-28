@@ -3,21 +3,35 @@
 
 #include <stdio.h>
 
+static void init_lines(Lines *lines);
+static void write_line(Lines *lines, int32_t line, int32_t chunk_index);
+static int32_t get_line(Lines *lines, int32_t chunk_index);
+static void free_lines(Lines *lines);
+
+AntLineAPI ant_line = {
+    .init = init_lines,
+    .write = write_line,
+    .get = get_line,
+    .free = free_lines,
+};
+
+/* Helpers */
 static bool within_range(int32_t start, int32_t end, int32_t index);
 static bool line_exists(Lines *lines, int32_t line_number);
 
-void init_lines(Lines *lines) {
+static void init_lines(Lines *lines) {
   lines->count = 0;
   lines->capacity = 0;
   lines->lines = NULL;
 }
 
-void write_line(Lines *lines, int32_t line_number, int32_t chunk_index) {
+static void write_line(Lines *lines, int32_t line_number, int32_t chunk_index) {
 
   if (lines->capacity < lines->count + 1) {
     size_t old_capacity = lines->capacity;
     lines->capacity = GROW_CAPACITY(old_capacity);
-    lines->lines = GROW_ARRAY(Line, lines->lines, old_capacity, lines->capacity);
+    lines->lines =
+        GROW_ARRAY(Line, lines->lines, old_capacity, lines->capacity);
   }
 
   /* NOTE: we optimized adding new lines by not looping through the lines array
@@ -37,7 +51,7 @@ void write_line(Lines *lines, int32_t line_number, int32_t chunk_index) {
   lines->count++;
 }
 
-int32_t get_line(Lines *lines, int32_t chunk_index) {
+static int32_t get_line(Lines *lines, int32_t chunk_index) {
 
   for (int i = 0; i < lines->count; i++) {
     int32_t start = lines->lines[i].start;
@@ -52,9 +66,9 @@ int32_t get_line(Lines *lines, int32_t chunk_index) {
   return -1;
 }
 
-void free_lines(Lines *lines) {
-   if (!lines)
-     return;
+static void free_lines(Lines *lines) {
+  if (!lines)
+    return;
 
   FREE_ARRAY(Line, lines->lines, lines->capacity);
   init_lines(lines);

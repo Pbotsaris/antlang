@@ -14,7 +14,7 @@ static InterpretResult run(VM *vm);
 
 AntVMAPI ant_vm = {
     .new = new_vm,
-    .free_vm = free_vm,
+    .free = free_vm,
     .interpret = interpret,
 };
 

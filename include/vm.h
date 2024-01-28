@@ -17,7 +17,7 @@ typedef struct VM{
 
 typedef struct VM_API{
    VM*               (*new)(void);
-   void              (*free_vm)(VM*);
+   void              (*free)(VM*);
    InterpretResult   (*interpret)(VM*, Chunk*);
 }AntVMAPI;
 

@@ -11,7 +11,7 @@ static void write_constant(Chunk *chunk, Value value, int32_t line);
 AntChunkAPI ant_chunk = {
     .init = init_chunk,
     .write = write_chunk,
-    .free_chunk = free_chunk,
+    .free = free_chunk,
     .write_constant = write_constant,
 };
 
@@ -20,7 +20,7 @@ static void init_chunk(Chunk *chunk) {
   chunk->count = 0;
   chunk->capacity = 0;
   chunk->code = NULL;
-  init_lines(&chunk->lines);
+  ant_line.init(&chunk->lines);
   init_value_array(&chunk->constants);
 }
 
@@ -34,7 +34,7 @@ static void write_chunk(Chunk *chunk, uint8_t byte, int32_t line) {
   }
 
   chunk->code[chunk->count] = byte;
-  write_line(&chunk->lines, line, chunk->count);
+  ant_line.write(&chunk->lines, line, chunk->count);
   chunk->count++;
 }
 
@@ -43,7 +43,7 @@ static void free_chunk(Chunk *chunk) {
     return;
 
   FREE_ARRAY(uint8_t, chunk->code, chunk->capacity);
-  free_lines(&chunk->lines);
+  ant_line.free(&chunk->lines);
   free_value_array(&chunk->constants);
   init_chunk(chunk);
 }

@@ -21,10 +21,10 @@ void disassemble_chunk(Chunk *chunk, const char *name) {
 static int disassemble_instruction(Chunk *chunk, int offset) {
   printf("%04d ", offset);
 
-  int32_t chunk_line = get_line(&chunk->lines, offset);
+  int32_t chunk_line = ant_line.get(&chunk->lines, offset);
 
   bool same_line =
-      offset > 0 && chunk_line == get_line(&chunk->lines, offset - 1);
+      offset > 0 && chunk_line == ant_line.get(&chunk->lines, offset - 1);
 
   if (same_line)
     printf("   | ");
