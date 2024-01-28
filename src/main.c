@@ -1,28 +1,71 @@
-#include "chunk.h"
-#include "debug.h"
 #include "vm.h"
+#include <stdio.h>
+#include <stdlib.h>
 
-int main(void) {
+static void run_file(VM *vm, const char *path);
+static char *read_file(const char *path);
 
+int main(int ac, char *av[]) {
   VM *vm = ant_vm.new();
 
-  Chunk chunk;
-  ant_chunk.init(&chunk);
+  switch (ac) {
+  case 1:
+    ant_vm.repl(vm);
+    break;
+  case 2:
+    run_file(vm, av[1]);
+    break;
+  default:
+    fprintf(stderr, "Usage: ant [path]\n");
+    break;
+  }
 
-  ant_chunk.write_constant(&chunk, 30, 1);
-  ant_chunk.write_constant(&chunk, 5, 1);
-  ant_chunk.write(&chunk, OP_ADD, 1);
-  ant_chunk.write(&chunk, OP_NEGATE, 1);
-
-  ant_chunk.write_constant(&chunk, 2, 1);
-  ant_chunk.write(&chunk, OP_DIVIDE, 1);
-
-  ant_chunk.write(&chunk, OP_RETURN, 1);
-  ant_vm.interpret(vm, &chunk);
-
- // InterpretResult res = interpret(&vm, &chunk);
-
-  ant_chunk.free(&chunk);
   ant_vm.free(vm);
   return 0;
+}
+
+static void run_file(VM *vm, const char *path) {
+  char *source = read_file(path);
+
+  InterpretResult result = ant_vm.interpret(vm, source);
+  free(source);
+}
+
+static char *read_file(const char *path) {
+
+  FILE *file = fopen(path, "rb");
+
+  if (file == NULL) {
+    printf("Error: Could not open file: %s\n", path);
+    exit(74);
+  }
+
+  int r = fseek(file, 0L, SEEK_END);
+
+  if (r != 0) {
+    printf("Error: Could not seek file: %s\n", path);
+    exit(74);
+  }
+
+  size_t file_size = ftell(file);
+  rewind(file);
+
+  char *buffer = (char *)malloc((file_size + 1) * sizeof(char));
+
+  if (buffer == NULL) {
+    printf("Error: Could not allocate memory for reading file: %s\n", path);
+    exit(74);
+  }
+
+  size_t rd_len = fread(buffer, sizeof(char), file_size, file);
+
+  if (rd_len < file_size) {
+    printf("Error: Could not read file: %s. File size: %ld bytes, read: %ld " "bytes\n", path, file_size, rd_len);
+    exit(74);
+  }
+
+  buffer[rd_len] = '\0';
+
+  fclose(file);
+  return buffer;
 }

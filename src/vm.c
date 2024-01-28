@@ -1,6 +1,6 @@
+#include "common.h"
 #include "vm.h"
 #include "chunk.h"
-#include "common.h"
 #include "config.h"
 #include "debug.h"
 #include "utils.h"
@@ -8,16 +8,22 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 /* Public */
 static VM *new_vm();
+static InterpretResult interpret_chunk(VM *vm, Chunk *chunk);
+static InterpretResult interpret_source(VM *vm, const char *source);
+static void repl(VM *vm);
 static void free_vm(VM *vm);
-static InterpretResult interpret(VM *vm, Chunk *chunk);
+
 
 AntVMAPI ant_vm = {
     .new = new_vm,
     .free = free_vm,
-    .interpret = interpret,
+    .interpret_chunk = interpret_chunk,
+    .interpret_source = interpret_source,
+    .repl = repl,
 };
 
 /* helpers */
@@ -40,17 +46,40 @@ static VM *new_vm() {
   reset_stack(vm);
   vm->chunk = NULL;
   vm->ip = NULL;
+  vm->compiler = ant_compiler.new();
   return vm;
 }
 
-static InterpretResult interpret(VM *vm, Chunk *chunk) {
+static InterpretResult interpret_chunk(VM *vm, Chunk *chunk) {
   vm->chunk = chunk;
   vm->ip = vm->chunk->code;
   return run(vm);
 }
 
+static InterpretResult interpret_source(VM *vm, const char *source) {
+  ant_compiler.compile(vm->compiler, source);
+  return INTERPRET_OK;
+}
+
+static void repl(VM *vm) {
+   char line[OPTION_LINE_MAX];
+
+   while(true){
+      printf("> ");
+
+      if(!fgets(line, OPTION_LINE_MAX, stdin)){
+         printf("\n");
+         break;
+      }
+
+      interpret_source(vm, line);//TODO: implement
+   }
+
+
+}
+
 static void free_vm(VM *vm) {
- // ant_chunk.free(vm->chunk);
+  ant_compiler.free(vm->compiler);
   free(vm);
 }
 
@@ -127,9 +156,9 @@ static void push_stack(VM *vm, Value value) {
 
   int32_t stack_index = (int32_t)(vm->stack_top - vm->stack);
 
-  if (stack_index == CONST_STACK_MAX) {
-    printf("Error: Stack overflow\n");
-    exit(1);
+  if (stack_index == OPTION_STACK_MAX) {
+    fprintf(stderr, "Stack overflow\n");
+    exit(11);
   }
 
   *(vm->stack_top) = value;
@@ -139,8 +168,8 @@ static void push_stack(VM *vm, Value value) {
 static Value pop_stack(VM *vm) {
 
   if (vm->stack_top == vm->stack) {
-    printf("Error: Stack underflow\n");
-    exit(1);
+    fprintf(stderr, "Stack underflow\n");
+    exit(11);
   }
 
   vm->stack_top--;
