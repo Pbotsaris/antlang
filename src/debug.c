@@ -1,6 +1,7 @@
 #include "debug.h"
 #include "lines.h"
 #include "values.h"
+#include "utils.h"
 
 #include <stdio.h>
 
@@ -60,9 +61,8 @@ static int print_constant_instruction(const char *name, Chunk *chunk, int offset
 
   /* putting 24 bits together to get the constant index */
   if (chunk->code[offset] == OP_CONSTANT_LONG) {
-    const_index = chunk->code[offset + 3]; // highest byte first then we shift...
-    const_index = (const_index << 8) | chunk->code[offset + 2]; 
-    const_index = (const_index << 8) | chunk->code[offset + 1];
+    uint8_t *operand_bytes = chunk->code + offset + 1;
+    const_index = ant_utils.unpack_int32(operand_bytes, 3);
     operand_offset = 4; // 1 opcode + 3 operands
 
   } else {

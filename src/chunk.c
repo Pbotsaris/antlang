@@ -3,7 +3,19 @@
 #include "chunk.h"
 #include "memory.h"
 
-void init_chunk(Chunk *chunk) {
+static void init_chunk(Chunk *chunk);
+static void write_chunk(Chunk *chunk, uint8_t byte, int32_t line);
+static void free_chunk(Chunk *chunk);
+static void write_constant(Chunk *chunk, Value value, int32_t line);
+
+AntChunkAPI ant_chunk = {
+    .init = init_chunk,
+    .write = write_chunk,
+    .free_chunk = free_chunk,
+    .write_constant = write_constant,
+};
+
+static void init_chunk(Chunk *chunk) {
 
   chunk->count = 0;
   chunk->capacity = 0;
@@ -12,7 +24,7 @@ void init_chunk(Chunk *chunk) {
   init_value_array(&chunk->constants);
 }
 
-void write_chunk(Chunk *chunk, uint8_t byte, int32_t line) {
+static void write_chunk(Chunk *chunk, uint8_t byte, int32_t line) {
 
   if (chunk->capacity < chunk->count + 1) {
     size_t old_capacity = chunk->capacity;
@@ -26,19 +38,17 @@ void write_chunk(Chunk *chunk, uint8_t byte, int32_t line) {
   chunk->count++;
 }
 
-void free_chunk(Chunk *chunk) {
+static void free_chunk(Chunk *chunk) {
+  if (!chunk)
+    return;
+
   FREE_ARRAY(uint8_t, chunk->code, chunk->capacity);
   free_lines(&chunk->lines);
   free_value_array(&chunk->constants);
   init_chunk(chunk);
 }
 
-int add_constant(Chunk *chunk, Value constant) {
-  write_value_array(&chunk->constants, constant);
-  return chunk->constants.count - 1;
-}
-
-void write_constant(Chunk *chunk, Value constant, int32_t line) {
+static void write_constant(Chunk *chunk, Value constant, int32_t line) {
 
   int32_t constant_index = chunk->constants.count;
   write_value_array(&chunk->constants, constant);

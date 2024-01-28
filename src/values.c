@@ -22,6 +22,9 @@ void write_value_array(ValueArray *array, Value value){
 }
 
 void free_value_array(ValueArray *array){
+   if(!array)
+      return;
+
    FREE_ARRAY(Value, array->values, array->capacity);
    init_value_array(array);
 }

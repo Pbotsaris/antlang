@@ -53,6 +53,9 @@ int32_t get_line(Lines *lines, int32_t chunk_index) {
 }
 
 void free_lines(Lines *lines) {
+   if (!lines)
+     return;
+
   FREE_ARRAY(Line, lines->lines, lines->capacity);
   init_lines(lines);
 }

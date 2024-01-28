@@ -1,5 +1,5 @@
-#ifndef ANT_LINE_H
-#define ANT_LINE_H
+#ifndef ANT_LINES_H
+#define ANT_LINES_H
 
 #include "common.h"
 
@@ -21,4 +21,4 @@ void write_line(Lines *lines, int32_t line, int32_t chunk_index);
 int32_t get_line(Lines *lines, int32_t chunk_index);
 void free_lines(Lines *lines);
 
-#endif // ANT_LINE_H
+#endif // ANT_LINES_H
