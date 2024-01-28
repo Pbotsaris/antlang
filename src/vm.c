@@ -38,7 +38,7 @@ static InterpretResult interpret(VM *vm, Chunk *chunk) {
 }
 
 static void free_vm(VM *vm) {
-   ant_chunk.free_chunk(vm->chunk);
+   ant_chunk.free(vm->chunk);
    free(vm);
 }
 
@@ -56,7 +56,7 @@ static InterpretResult run(VM *vm) {
 
     case OP_CONSTANT: {
       Value constant = READ_CONSTANT();
-      print_value(constant);
+      ant_values.print(constant);
       printf("\n");
       break;
     }
@@ -64,7 +64,7 @@ static InterpretResult run(VM *vm) {
     case OP_CONSTANT_LONG: {
       uint8_t *bytes = vm->ip;
       Value constant = ant_utils.unpack_int32(bytes, 3);
-      print_value(constant);
+      ant_values.print(constant);
       printf("\n");
 
       vm->ip += 3;

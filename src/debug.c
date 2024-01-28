@@ -78,7 +78,7 @@ static int print_constant_instruction(const char *name, Chunk *chunk, int offset
     return offset + operand_offset;
   }
 
-  print_value(chunk->constants.values[const_index]);
+  ant_values.print(chunk->constants.values[const_index]);
 
   return offset + operand_offset;
 }
