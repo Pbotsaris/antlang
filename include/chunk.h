@@ -3,9 +3,15 @@
 #include "common.h"
 #include "lines.h"
 #include "values.h"
+#include "config.h"
 
 typedef enum {
   OP_RETURN,        /* no operand */
+  OP_NEGATE,        /* no operand */
+  OP_ADD,           /* no operand */
+  OP_SUBTRACT,      /* no operand */
+  OP_MULTIPLY,      /* no operand */
+  OP_DIVIDE,        /* no operand */
   OP_CONSTANT,      /* 8-bit operand */
   OP_CONSTANT_LONG, /* 24-bit operand */
 } OpCode;
@@ -17,11 +23,11 @@ typedef enum {
  * and line number information for error reporting.
  */
 typedef struct {
-    int32_t capacity;     /**< The total allocated capacity for the bytecode and associated data. */
-    int32_t count;        /**< The current number of bytecode instructions in the chunk. */
-    ValueArray constants; /**< An array of constants used in the bytecode. */
-    Lines lines;          /**< Mapping of each bytecode instruction to its line number in the source code. */
-    uint8_t *code;        /**< The array of bytecode instructions. */
+    int32_t    capacity;                  /**< The total allocated capacity for the bytecode and associated data. */
+    int32_t    count;                     /**< The current number of bytecode instructions in the chunk. */
+    ValueArray constants;                 /**< An array of constants used in the bytecode. */
+    Lines      lines;                     /**< Mapping of each bytecode instruction to its line number in the source code. */
+    uint8_t*   code;                      /**< The array of bytecode instructions. */
 } Chunk;
 
 typedef struct AntChunk {

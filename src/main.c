@@ -8,14 +8,17 @@ int main(void) {
 
   Chunk chunk;
   ant_chunk.init(&chunk);
-  ant_chunk.write_constant(&chunk, 30.5, 20);
 
-  for(int i = 0; i < 300; i++){
-      ant_chunk.write_constant(&chunk, 20.1+i, 20+1);
-  }
+  ant_chunk.write_constant(&chunk, 30, 1);
+  ant_chunk.write_constant(&chunk, 5, 1);
+  ant_chunk.write(&chunk, OP_ADD, 1);
+  ant_chunk.write(&chunk, OP_NEGATE, 1);
 
-  ant_chunk.write(&chunk, OP_RETURN, 10);
-  disassemble_chunk(&chunk, "test chunk");
+  ant_chunk.write_constant(&chunk, 2, 1);
+  ant_chunk.write(&chunk, OP_DIVIDE, 1);
+
+  ant_chunk.write(&chunk, OP_RETURN, 1);
+  ant_vm.interpret(vm, &chunk);
 
  // InterpretResult res = interpret(&vm, &chunk);
 

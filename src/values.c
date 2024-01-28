@@ -42,5 +42,5 @@ static void free_value_array(ValueArray *array){
 
 
 static void print_value(Value value){
-   printf("%g\n", value);
+   printf("%g", value);
 }
