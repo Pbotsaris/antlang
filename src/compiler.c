@@ -4,7 +4,7 @@
 #include "compiler.h"
 
 static Compiler* new_compiler(void);
-static void compile(Compiler *compiler, const char* source);
+static bool compile(Compiler *compiler, const char* source);
 static void free_compiler(Compiler* compiler);
 
 AntCompilerAPI ant_compiler = {
@@ -21,10 +21,11 @@ static Compiler* new_compiler(void) {
       exit(1);
    }
 
+   compiler->scanner = ant_scanner.new();
    return compiler;
 }
 
-static void compile(Compiler *compiler, const char* source) {
+static bool compile(Compiler *compiler, const char* source) {
 
    ant_scanner.init(compiler->scanner, source);
    int32_t line = -1;
@@ -40,7 +41,7 @@ static void compile(Compiler *compiler, const char* source) {
       }
       printf("%2d '%.*s'\n", token.type, token.length, token.start);
 
-      if(token.type == TOKEN_EOF) return;
+      if(token.type == TOKEN_EOF) return true;
    }
 }
 

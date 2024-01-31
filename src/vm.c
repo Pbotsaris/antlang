@@ -1,6 +1,6 @@
-#include "common.h"
 #include "vm.h"
 #include "chunk.h"
+#include "common.h"
 #include "config.h"
 #include "debug.h"
 #include "utils.h"
@@ -12,17 +12,14 @@
 
 /* Public */
 static VM *new_vm();
-static InterpretResult interpret_chunk(VM *vm, Chunk *chunk);
 static InterpretResult interpret_source(VM *vm, const char *source);
 static void repl(VM *vm);
 static void free_vm(VM *vm);
 
-
 AntVMAPI ant_vm = {
     .new = new_vm,
     .free = free_vm,
-    .interpret_chunk = interpret_chunk,
-    .interpret_source = interpret_source,
+    .interpret = interpret_source,
     .repl = repl,
 };
 
@@ -50,32 +47,37 @@ static VM *new_vm() {
   return vm;
 }
 
-static InterpretResult interpret_chunk(VM *vm, Chunk *chunk) {
-  vm->chunk = chunk;
-  vm->ip = vm->chunk->code;
-  return run(vm);
-}
-
 static InterpretResult interpret_source(VM *vm, const char *source) {
-  ant_compiler.compile(vm->compiler, source);
+  Chunk chunk;
+  ant_chunk.init(&chunk);
+
+  if (!ant_compiler.compile(vm->compiler, source)) {
+    ant_chunk.free(&chunk);
+    return INTERPRET_COMPILE_ERROR;
+  }
+
+  vm->chunk = &chunk;
+  vm->ip = vm->chunk->code;
+
+ // InterpretResult result = run(vm);
+
+  ant_chunk.free(&chunk);
   return INTERPRET_OK;
 }
 
 static void repl(VM *vm) {
-   char line[OPTION_LINE_MAX];
+  char line[OPTION_LINE_MAX];
 
-   while(true){
-      printf("> ");
+  while (true) {
+    printf("> ");
 
-      if(!fgets(line, OPTION_LINE_MAX, stdin)){
-         printf("\n");
-         break;
-      }
+    if (!fgets(line, OPTION_LINE_MAX, stdin)) {
+      printf("\n");
+      break;
+    }
 
-      interpret_source(vm, line);//TODO: implement
-   }
-
-
+    interpret_source(vm, line); 
+  }
 }
 
 static void free_vm(VM *vm) {
@@ -89,8 +91,8 @@ static InterpretResult run(VM *vm) {
 
 #define BINARY_OP(op)                                                          \
   do {                                                                         \
-    Value b = pop_stack(vm);                                                  \
-    Value a = pop_stack(vm);                                                  \
+    Value b = pop_stack(vm);                                                   \
+    Value a = pop_stack(vm);                                                   \
     push_stack(vm, a op b);                                                    \
   } while (false)
 

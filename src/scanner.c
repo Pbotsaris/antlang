@@ -18,7 +18,6 @@ AntScannerAPI ant_scanner = {
 
 /* helpers */
 static Token string_token(Scanner *scanner);
-static Token string_interpolation_token(Scanner *scanner);
 static Token number_token(Scanner *scanner);
 static Token indentifier_token(Scanner *scanner);
 static Token make_token(Scanner *scanner, TokenType type);
@@ -31,6 +30,7 @@ static void skip_whitespace(Scanner *scanner);
 static void skip_comments(Scanner *scanner);
 static char eat_char(Scanner *scanner);
 static char peek_char(Scanner *scanner);
+static char peek_next_char(Scanner *scanner);
 
 static bool reached_end(Scanner *scanner);
 static bool is_last_char(Scanner *scanner);
@@ -42,6 +42,7 @@ static void init_scanner(Scanner *scanner, const char *source) {
   scanner->start = source;
   scanner->current = source;
   scanner->line = 1;
+  scanner->is_interpolating = false;
 }
 
 static Scanner *new_scanner(void) {
@@ -61,7 +62,12 @@ static Token scan_token(Scanner *scanner) {
   scanner->start = scanner->current;
 
   if (reached_end(scanner))
-    return (Token){.type = TOKEN_EOF};
+    return (Token){
+        .type = TOKEN_EOF, .start = "EOF", .length = 3, .line = scanner->line};
+
+  if (scanner->is_interpolating) {
+    return string_token(scanner);
+  }
 
   char c = eat_char(scanner);
 
@@ -140,26 +146,6 @@ static Token string_token(Scanner *scanner) {
     if (peek_char(scanner) == '\n') {
       scanner->line++;
     }
-
-    if (peek_char(scanner) == '$' && peek_char(scanner + 1) == '{') {
-      eat_char(scanner); // eat $
-      eat_char(scanner); // eat 
-
-      // if we have a string before the interpolation
-      if (scanner->start < scanner->current - 2) {
-        scanner->current -= 2;
-        return make_token(scanner, TOKEN_STRING);
-      }
-
-      return make_token(scanner, TOKEN_INTERPOLATION_START);
-    }
-
-
-    if (peek_char(scanner) == '}') {
-      eat_char(scanner);
-      return make_token(scanner, TOKEN_INTERPOLATION_END);
-    }
-
     eat_char(scanner);
   }
 
@@ -319,6 +305,7 @@ static char eat_char(Scanner *scanner) {
 }
 
 static char peek_char(Scanner *scanner) { return *(scanner->current); }
+static char peek_next_char(Scanner *scanner) { return *(scanner->current + 1); }
 static bool reached_end(Scanner *scanner) { return *scanner->current == '\0'; }
 static bool is_last_char(Scanner *scanner) {
   return (scanner->current - scanner->start <= 1);

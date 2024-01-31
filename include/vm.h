@@ -24,8 +24,7 @@ typedef struct VM_API{
    VM*               (*new)(void);
    void              (*free)(VM*);
    void              (*repl)(VM*);
-   InterpretResult   (*interpret_chunk)(VM*, Chunk*);
-   InterpretResult   (*interpret_source)(VM*, const char*);
+   InterpretResult   (*interpret)(VM*, const char*);
 }AntVMAPI;
 
 extern AntVMAPI ant_vm;

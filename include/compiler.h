@@ -9,11 +9,9 @@ typedef struct  {
 
 typedef struct AntCompiler{
    Compiler* (*new)(void);
-   void (*compile)(Compiler *compiler, const char* source);
+   bool (*compile)(Compiler *compiler, const char* source);
    void (*free)(Compiler* compiler);
 }AntCompilerAPI;
 
 extern AntCompilerAPI ant_compiler;
-
-
 #endif
