@@ -59,7 +59,7 @@ typedef struct AntChunk {
    * @param value the constant value to write
    * @param line the line number of the constant
    */
-  void (*write_constant)(Chunk *chunk, Value value, int32_t line);
+  bool (*write_constant)(Chunk *chunk, Value value, int32_t line);
 } AntChunkAPI;
 
 extern AntChunkAPI ant_chunk;

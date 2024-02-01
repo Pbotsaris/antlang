@@ -12,14 +12,14 @@
 
 /* Public */
 static VM *new_vm();
-static InterpretResult interpret_source(VM *vm, const char *source);
+static InterpretResult interpret(VM *vm, const char *source);
 static void repl(VM *vm);
 static void free_vm(VM *vm);
 
 AntVMAPI ant_vm = {
     .new = new_vm,
     .free = free_vm,
-    .interpret = interpret_source,
+    .interpret = interpret,
     .repl = repl,
 };
 
@@ -47,11 +47,13 @@ static VM *new_vm() {
   return vm;
 }
 
-static InterpretResult interpret_source(VM *vm, const char *source) {
+static InterpretResult interpret(VM *vm, const char *source) {
   Chunk chunk;
   ant_chunk.init(&chunk);
 
-  if (!ant_compiler.compile(vm->compiler, source)) {
+  bool valid = ant_compiler.compile(vm->compiler, source);
+
+  if (!valid) {
     ant_chunk.free(&chunk);
     return INTERPRET_COMPILE_ERROR;
   }
@@ -59,7 +61,7 @@ static InterpretResult interpret_source(VM *vm, const char *source) {
   vm->chunk = &chunk;
   vm->ip = vm->chunk->code;
 
- // InterpretResult result = run(vm);
+  InterpretResult result = run(vm);
 
   ant_chunk.free(&chunk);
   return INTERPRET_OK;
@@ -76,7 +78,7 @@ static void repl(VM *vm) {
       break;
     }
 
-    interpret_source(vm, line); 
+    interpret(vm, line); 
   }
 }
 

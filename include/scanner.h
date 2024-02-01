@@ -66,7 +66,6 @@ typedef struct {
    const char* start;
    const char* current;
    int32_t line;
-   bool  is_interpolating;
 }Scanner;
 
 typedef struct AntScanner{
