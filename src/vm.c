@@ -51,7 +51,7 @@ static InterpretResult interpret(VM *vm, const char *source) {
   Chunk chunk;
   ant_chunk.init(&chunk);
 
-  bool valid = ant_compiler.compile(vm->compiler, source);
+  bool valid = ant_compiler.compile(vm->compiler, source, &chunk);
 
   if (!valid) {
     ant_chunk.free(&chunk);
@@ -64,7 +64,7 @@ static InterpretResult interpret(VM *vm, const char *source) {
   InterpretResult result = run(vm);
 
   ant_chunk.free(&chunk);
-  return INTERPRET_OK;
+  return result;
 }
 
 static void repl(VM *vm) {
@@ -79,6 +79,7 @@ static void repl(VM *vm) {
     }
 
     interpret(vm, line); 
+    printf("\n");
   }
 }
 

@@ -25,6 +25,8 @@ static void disassemble_chunk(Chunk *chunk, const char *name) {
   for (int offset = 0; offset < chunk->count;) {
     offset = disassemble_instruction(chunk, offset);
   }
+
+  printf("\n");
 }
 
 /* Helpers */
@@ -33,8 +35,7 @@ static int32_t disassemble_instruction(Chunk *chunk, int offset) {
 
   int32_t chunk_line = ant_line.get(&chunk->lines, offset);
 
-  bool same_line =
-      offset > 0 && chunk_line == ant_line.get(&chunk->lines, offset - 1);
+  bool same_line = offset > 0 && chunk_line == ant_line.get(&chunk->lines, offset - 1);
 
   if (same_line)
     printf("   | ");
@@ -75,7 +76,7 @@ static int32_t disassemble_instruction(Chunk *chunk, int offset) {
 }
 
 static int32_t print_instruction(const char *name, int offset) {
-  printf("%s\n", name);
+  printf("%s ", name);
   return offset + 1;
 }
 

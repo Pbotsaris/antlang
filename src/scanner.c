@@ -30,7 +30,6 @@ static void skip_whitespace(Scanner *scanner);
 static void skip_comments(Scanner *scanner);
 static char eat_char(Scanner *scanner);
 static char peek_char(Scanner *scanner);
-static char peek_next_char(Scanner *scanner);
 
 static bool reached_end(Scanner *scanner);
 static bool is_last_char(Scanner *scanner);
@@ -42,7 +41,6 @@ static void init_scanner(Scanner *scanner, const char *source) {
   scanner->start = source;
   scanner->current = source;
   scanner->line = 1;
-  scanner->is_interpolating = false;
 }
 
 static Scanner *new_scanner(void) {
@@ -65,9 +63,6 @@ static Token scan_token(Scanner *scanner) {
     return (Token){
         .type = TOKEN_EOF, .start = "EOF", .length = 3, .line = scanner->line};
 
-  if (scanner->is_interpolating) {
-    return string_token(scanner);
-  }
 
   char c = eat_char(scanner);
 
@@ -305,7 +300,6 @@ static char eat_char(Scanner *scanner) {
 }
 
 static char peek_char(Scanner *scanner) { return *(scanner->current); }
-static char peek_next_char(Scanner *scanner) { return *(scanner->current + 1); }
 static bool reached_end(Scanner *scanner) { return *scanner->current == '\0'; }
 static bool is_last_char(Scanner *scanner) {
   return (scanner->current - scanner->start <= 1);
