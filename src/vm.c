@@ -43,7 +43,7 @@ static VM *new_vm() {
   VM *vm = (VM *)malloc(sizeof(VM));
 
   if (vm == NULL) {
-    fprintf(stderr,"Error: Could not allocate memory for VM\n");
+    fprintf(stderr, "Error: Could not allocate memory for VM\n");
     exit(1);
   }
 
@@ -109,7 +109,7 @@ static InterpretResult run(VM *vm) {
 
 #define BINARY_OP(op)                                                          \
   do {                                                                         \
-    if(invalid_binary_op(vm)) {                                               \
+    if (invalid_binary_op(vm)) {                                               \
       runtime_error(vm, "Operands must be numbers");                           \
       return INTERPRET_RUNTIME_ERROR;                                          \
     }                                                                          \
@@ -166,6 +166,18 @@ static InterpretResult run(VM *vm) {
 
     case OP_DIVIDE:
       BINARY_OP(/);
+      break;
+
+    case OP_FALSE:
+      push_stack(vm, ant_value.from_bool(false));
+      break;
+
+    case OP_NIL:
+      push_stack(vm, ant_value.from_nil());
+      break;
+
+    case OP_TRUE:
+      push_stack(vm, ant_value.from_bool(true));
       break;
 
     case OP_CONSTANT:

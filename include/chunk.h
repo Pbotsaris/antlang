@@ -13,6 +13,9 @@ typedef enum {
   OP_SUBTRACT,      /* no operand */
   OP_MULTIPLY,      /* no operand */
   OP_DIVIDE,        /* no operand */
+  OP_NIL,           /* no operand */
+  OP_TRUE,          /* no operand */
+  OP_FALSE,         /* no operand */
   OP_CONSTANT,      /* 8-bit operand */
   OP_CONSTANT_LONG, /* 24-bit operand */
 } OpCode;

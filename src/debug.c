@@ -66,8 +66,8 @@ static void trace_token(Token token, const char *name, int32_t depth) {
   }
 
   if (token.start == NULL) {
-     printf("%s%-*s[ NULL ]%s\n", COLOR_CYAN, 10, name, COLOR_RESET);
-     return;
+    printf("%s%-*s[ NULL ]%s\n", COLOR_CYAN, 10, name, COLOR_RESET);
+    return;
   }
 
   printf("%s%-*s", COLOR_CYAN, 10, name);
@@ -112,6 +112,15 @@ static int32_t disassemble_instruction(Chunk *chunk, int offset) {
 
   case OP_DIVIDE:
     return print_instruction("OP_DIVIDE", offset);
+
+  case OP_FALSE:
+    return print_instruction("OP_FALSE", offset);
+
+  case OP_NIL:
+    return print_instruction("OP_NIL", offset);
+
+  case OP_TRUE:
+    return print_instruction("OP_TRUE", offset);
 
   case OP_CONSTANT:
     return print_constant_instruction("OP_CONSTANT", chunk, offset);

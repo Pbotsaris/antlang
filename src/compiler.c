@@ -61,6 +61,7 @@ static void number(Compiler *compiler);
 static void grouping(Compiler *compiler);
 static void unary(Compiler *compiler);
 static void binary(Compiler *compiler);
+static void literal(Compiler *compiler);
 
 /* Parser Rules */
 
@@ -108,17 +109,17 @@ ParseRule rules[] = {
     [TOKEN_AND] = {NULL, NULL, PREC_NONE},
     [TOKEN_CLASS] = {NULL, NULL, PREC_NONE},
     [TOKEN_ELSE] = {NULL, NULL, PREC_NONE},
-    [TOKEN_FALSE] = {NULL, NULL, PREC_NONE},
+    [TOKEN_FALSE] = {literal, NULL, PREC_NONE},
     [TOKEN_FOR] = {NULL, NULL, PREC_NONE},
     [TOKEN_FN] = {NULL, NULL, PREC_NONE},
     [TOKEN_IF] = {NULL, NULL, PREC_NONE},
-    [TOKEN_NIL] = {NULL, NULL, PREC_NONE},
+    [TOKEN_NIL] = {literal, NULL, PREC_NONE},
     [TOKEN_OR] = {NULL, NULL, PREC_NONE},
     [TOKEN_PRINT] = {NULL, NULL, PREC_NONE},
     [TOKEN_RETURN] = {NULL, NULL, PREC_NONE},
     [TOKEN_SUPER] = {NULL, NULL, PREC_NONE},
     [TOKEN_THIS] = {NULL, NULL, PREC_NONE},
-    [TOKEN_TRUE] = {NULL, NULL, PREC_NONE},
+    [TOKEN_TRUE] = {literal, NULL, PREC_NONE},
     [TOKEN_LET] = {NULL, NULL, PREC_NONE},
     [TOKEN_WHILE] = {NULL, NULL, PREC_NONE},
     [TOKEN_ERROR] = {NULL, NULL, PREC_NONE},
@@ -371,6 +372,22 @@ TRACE_PARSER_TOKEN(compiler->parser->prev, compiler->parser->current);
   default:
     return; /* unreachable */
   }
+
+TRACE_PARSER_EXIT();
+}
+
+/* */
+
+static void literal(Compiler *compiler){
+TRACE_PARSER_ENTER("Compiler *compiler = %p", compiler);
+TRACE_PARSER_TOKEN(compiler->parser->prev, compiler->parser->current);
+
+switch(compiler->parser->prev.type){
+   case TOKEN_FALSE: emit_byte(compiler, OP_FALSE); break;
+   case TOKEN_NIL: emit_byte(compiler, OP_NIL); break;                
+   case TOKEN_TRUE: emit_byte(compiler, OP_TRUE); break;
+   default: return; /* unreachable */
+}
 
 TRACE_PARSER_EXIT();
 }
