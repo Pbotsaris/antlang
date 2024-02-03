@@ -3,9 +3,11 @@
 #include "common.h"
 #include "config.h"
 #include "debug.h"
+#include "lines.h"
 #include "utils.h"
 #include "values.h"
 
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -23,20 +25,25 @@ AntVMAPI ant_vm = {
     .repl = repl,
 };
 
-/* helpers */
+/* VM */
 static InterpretResult run(VM *vm);
+static void runtime_error(VM *vm, const char *format, ...);
 
+/* Stack */
 static void reset_stack(VM *vm);
 static void push_stack(VM *vm, Value value);
 static Value pop_stack(VM *vm);
 static void print_stack(VM *vm);
+static Value peek_stack(VM *vm, int32_t distance);
+
+static bool invalid_binary_op(VM *vm);
 
 /* Implementation */
 static VM *new_vm() {
   VM *vm = (VM *)malloc(sizeof(VM));
 
   if (vm == NULL) {
-    printf("Error: Could not allocate memory for VM\n");
+    fprintf(stderr,"Error: Could not allocate memory for VM\n");
     exit(1);
   }
 
@@ -82,11 +89,11 @@ static void repl(VM *vm) {
       continue;
     }
 
-    if(strcmp(line, "exit\n") == 0 || strcmp(line, "q\n") == 0) {
+    if (strcmp(line, "exit\n") == 0 || strcmp(line, "q\n") == 0) {
       break;
     }
 
-    interpret(vm, line); 
+    interpret(vm, line);
     printf("\n");
   }
 }
@@ -102,12 +109,17 @@ static InterpretResult run(VM *vm) {
 
 #define BINARY_OP(op)                                                          \
   do {                                                                         \
-    Value b = pop_stack(vm);                                                   \
-    Value a = pop_stack(vm);                                                   \
-    push_stack(vm, a op b);                                                    \
+    if(invalid_binary_op(vm)) {                                               \
+      runtime_error(vm, "Operands must be numbers");                           \
+      return INTERPRET_RUNTIME_ERROR;                                          \
+    }                                                                          \
+    double b = ant_value.to_number(pop_stack(vm));                             \
+    double a = ant_value.to_number(pop_stack(vm));                             \
+    push_stack(vm, ant_value.from_number(a op b));                             \
   } while (false)
 
-  while (true) {
+  for (;;) {
+
 #ifdef DEBUG_TRACE_EXECUTION
     print_stack(vm);
 
@@ -123,11 +135,20 @@ static InterpretResult run(VM *vm) {
       ant_values.print(pop_stack(vm));
       return INTERPRET_OK;
 
-    case OP_NEGATE:
-      push_stack(vm, pop_stack(vm) * -1);
-      break;
+    case OP_NEGATE: {
 
-   case OP_POSITIVE:
+      if (!ant_value.is_number(peek_stack(vm, 0))) {
+        runtime_error(vm, "Operand must be a number");
+        return INTERPRET_RUNTIME_ERROR;
+      }
+
+      double num = ant_value.to_number(pop_stack(vm));
+      Value val = (ant_value.from_number(num * -1));
+      push_stack(vm, val);
+      break;
+    }
+
+    case OP_POSITIVE:
       push_stack(vm, pop_stack(vm));
       break;
 
@@ -153,10 +174,10 @@ static InterpretResult run(VM *vm) {
 
     case OP_CONSTANT_LONG: {
       uint8_t *bytes = vm->ip;
-      Value constant = ant_utils.unpack_int32(bytes, CONST_24BITS);
+      double constant = ant_utils.unpack_int32(bytes, CONST_24BITS);
       vm->ip += CONST_24BITS;
 
-      push_stack(vm, constant);
+      push_stack(vm, ant_value.from_number(constant));
       break;
     }
     }
@@ -165,6 +186,21 @@ static InterpretResult run(VM *vm) {
 #undef READ_CONSTANT
 #undef BINARY_OP
   }
+}
+
+static void runtime_error(VM *vm, const char *format, ...) {
+  va_list args;
+  va_start(args, format);
+  vfprintf(stderr, format, args);
+  va_end(args);
+  fputs("\n", stderr);
+
+  /* -1 because interpreter is one step ahead */
+  size_t instruction = vm->ip - vm->chunk->code - 1;
+  int32_t line = ant_line.get(&vm->chunk->lines, instruction);
+
+  fprintf(stderr, "[line %d] in script\n", line);
+  reset_stack(vm);
 }
 
 static void reset_stack(VM *vm) { vm->stack_top = vm->stack; }
@@ -201,4 +237,13 @@ static void print_stack(VM *vm) {
     printf("]");
   }
   printf("\n");
+}
+
+static Value peek_stack(VM *vm, int32_t distance) {
+  return vm->stack_top[-1 - distance];
+}
+
+static bool invalid_binary_op(VM *vm) {
+  return !ant_value.is_number(peek_stack(vm, 0)) ||
+         !ant_value.is_number(peek_stack(vm, 1));
 }

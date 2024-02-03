@@ -3,6 +3,7 @@
 
 #include "compiler.h"
 
+
 #if defined(DEBUG_PRINT_CODE) || defined(DEBUG_TRACE_PARSER)
 #include "debug.h"
 #endif
@@ -297,8 +298,8 @@ static void number(Compiler *compiler) {
 TRACE_PARSER_ENTER("Compiler *compiler = %p", compiler);
 TRACE_PARSER_TOKEN(compiler->parser->prev, compiler->parser->current);
 
-  Value value = (Value)strtod(compiler->parser->prev.start, NULL);
-  emit_constant(compiler, value);
+  double number = strtod(compiler->parser->prev.start, NULL);
+  emit_constant(compiler, ant_value.from_number(number));
 
 TRACE_PARSER_EXIT();
 }
@@ -447,6 +448,7 @@ static void error_at(Parser *parser, const char *message) {
 static void reset_parser(Parser *parser) {
   parser->panic_mode = false;
   parser->was_error = false;
+
 }
 
 /**/
