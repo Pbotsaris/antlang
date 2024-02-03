@@ -3,9 +3,44 @@
 
 #include "compiler.h"
 
-#ifdef DEBUG_PRINT_CODE
+#if defined(DEBUG_PRINT_CODE) || defined(DEBUG_TRACE_PARSER)
 #include "debug.h"
 #endif
+
+#define TRACE_PARSER_ENTER(fmt, ...)
+#define TRACE_PARSER_TOKEN(prev, current)
+#define TRACE_PARSER_EXIT()                                                    
+
+#ifdef DEBUG_TRACE_PARSER
+static int32_t trace_depth = 0;
+
+#undef TRACE_PARSER_ENTER
+#undef TRACE_PARSER_EXIT
+
+#define TRACE_PARSER_ENTER(fmt, ...)                                           \
+  do {                                                                         \
+    ant_debug.trace_parsing(__FUNCTION__, trace_depth++, fmt, ##__VA_ARGS__);  \
+  } while (0)
+
+#define TRACE_PARSER_EXIT()                                                    \
+  do {                                                                         \
+    trace_depth--;                                                             \
+  } while (false)
+
+#endif
+
+#if defined(DEBUG_TRACE_PARSER) && defined(DEBUG_TRACE_PARSER_VERBOSE)
+
+#undef TRACE_PARSER_TOKEN
+
+#define TRACE_PARSER_TOKEN(prev, current)                                      \
+  do {                                                                         \
+    ant_debug.trace_tokens(prev, current, trace_depth);                         \
+  } while (0)
+
+#endif
+
+
 
 /* Public */
 static Compiler *new_compiler(void);
@@ -54,7 +89,7 @@ ParseRule rules[] = {
     [TOKEN_DOT] = {NULL, NULL, PREC_NONE},
     [TOKEN_MINUS] = {unary, binary, PREC_TERM},
     // todo, TOKEN_PLUS as unary?
-    [TOKEN_PLUS] = {NULL, binary, PREC_TERM},
+    [TOKEN_PLUS] = {unary, binary, PREC_TERM},
     [TOKEN_SEMICOLON] = {NULL, NULL, PREC_NONE},
     [TOKEN_SLASH] = {NULL, binary, PREC_FACTOR},
     [TOKEN_STAR] = {NULL, binary, PREC_FACTOR},
@@ -114,6 +149,7 @@ static void error_at_current(Parser *parser, const char *message);
 
 /* utils */
 static void reset_parser(Parser *parser);
+static const char *precedence_name(Presedence presedence);
 
 /* Compiler API */
 static Compiler *new_compiler(void) {
@@ -133,6 +169,10 @@ static Compiler *new_compiler(void) {
 
   compiler->scanner = ant_scanner.new();
   compiler->parser = parser;
+
+  compiler->parser->current = (Token){.length = -1, .line = -1, .type = TOKEN_EOF, .start = NULL};
+  compiler->parser->prev = compiler->parser->current;
+
   return compiler;
 }
 
@@ -144,11 +184,16 @@ static bool compile(Compiler *compiler, const char *source, Chunk *chunk) {
   compiler->current_chunk = chunk;
   reset_parser(compiler->parser);
 
+#ifdef DEBUG_TRACE_PARSER
+  printf("\n== Parser Trace== \n");
+#endif
+
   next_token(compiler);
   expression(compiler);
 
   consume(compiler, TOKEN_EOF, "Expect end of expression.");
   end_of_compilation(compiler);
+
   return !compiler->parser->was_error;
 }
 
@@ -204,13 +249,22 @@ static void end_of_compilation(Compiler *compiler) {
 /**/
 
 static void expression(Compiler *compiler) {
+  TRACE_PARSER_ENTER("Compiler *compiler = %p", compiler);
+  TRACE_PARSER_TOKEN(compiler->parser->prev, compiler->parser->current);
+
   /* start with the lowest presedence */
   parse_pressedence(compiler, PREC_ASSIGNMENT);
+
+TRACE_PARSER_EXIT();
 }
 
 /**/
 
 static void parse_pressedence(Compiler *compiler, Presedence presedence) {
+TRACE_PARSER_ENTER("Compiler *compiler = %p, Presedence presedence = %s",
+                     compiler, precedence_name(presedence));
+
+TRACE_PARSER_TOKEN(compiler->parser->prev, compiler->parser->current);
 
   next_token(compiler);
 
@@ -235,42 +289,63 @@ static void parse_pressedence(Compiler *compiler, Presedence presedence) {
 
     infix_rule(compiler);
   }
+
+TRACE_PARSER_EXIT();
 }
 
 static void number(Compiler *compiler) {
+TRACE_PARSER_ENTER("Compiler *compiler = %p", compiler);
+TRACE_PARSER_TOKEN(compiler->parser->prev, compiler->parser->current);
+
   Value value = (Value)strtod(compiler->parser->prev.start, NULL);
   emit_constant(compiler, value);
+
+TRACE_PARSER_EXIT();
 }
+
 
 /**/
 
 static void grouping(Compiler *compiler) {
+TRACE_PARSER_ENTER("Compiler *compiler = %p", compiler);
+TRACE_PARSER_TOKEN(compiler->parser->prev, compiler->parser->current);
+
   expression(compiler);
   consume(compiler, TOKEN_RIGHT_PAREN, "Expect ')' after expression.");
+
+TRACE_PARSER_EXIT();
 }
 
 /**/
 
 static void unary(Compiler *compiler) {
-  parse_pressedence(compiler, PREC_UNARY);
+TRACE_PARSER_ENTER("Compiler *compiler = %p", compiler);
+TRACE_PARSER_TOKEN(compiler->parser->prev, compiler->parser->current);
 
   TokenType operator_type = compiler->parser->prev.type;
 
-  expression(compiler);
+  // expression(compiler);
+  parse_pressedence(compiler, PREC_UNARY);
 
   switch (operator_type) {
 
   case TOKEN_MINUS:
     emit_byte(compiler, OP_NEGATE);
+  case TOKEN_PLUS:
+    emit_byte(compiler, OP_POSITIVE);
     break;
 
   default:
     return; /* unreachable */
   }
+
+TRACE_PARSER_EXIT();
 }
 /**/
 
 static void binary(Compiler *compiler) {
+TRACE_PARSER_ENTER("Compiler *compiler = %p", compiler);
+TRACE_PARSER_TOKEN(compiler->parser->prev, compiler->parser->current);
 
   TokenType operator_type = compiler->parser->prev.type;
   ParseRule *rule = get_rule(operator_type);
@@ -295,6 +370,8 @@ static void binary(Compiler *compiler) {
   default:
     return; /* unreachable */
   }
+
+TRACE_PARSER_EXIT();
 }
 
 /**/
@@ -370,4 +447,35 @@ static void error_at(Parser *parser, const char *message) {
 static void reset_parser(Parser *parser) {
   parser->panic_mode = false;
   parser->was_error = false;
+}
+
+/**/
+
+static const char *precedence_name(Presedence precedence) {
+  switch (precedence) {
+  case PREC_NONE:
+    return "PREC_NONE";
+  case PREC_ASSIGNMENT:
+    return "PREC_ASSIGNMENT";
+  case PREC_OR:
+    return "PREC_OR";
+  case PREC_AND:
+    return "PREC_AND";
+  case PREC_EQUALITY:
+    return "PREC_EQUALITY";
+  case PREC_COMPARISON:
+    return "PREC_COMPARISON";
+  case PREC_TERM:
+    return "PREC_TERM";
+  case PREC_FACTOR:
+    return "PREC_FACTOR";
+  case PREC_UNARY:
+    return "PREC_UNARY";
+  case PREC_CALL:
+    return "PREC_CALL";
+  case PREC_PRIMARY:
+    return "PREC_PRIMARY";
+  default:
+    return "Unknown Presedence";
+  }
 }

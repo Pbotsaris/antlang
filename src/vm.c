@@ -78,6 +78,14 @@ static void repl(VM *vm) {
       break;
     }
 
+    if (line[0] == '\n') {
+      continue;
+    }
+
+    if(strcmp(line, "exit\n") == 0 || strcmp(line, "q\n") == 0) {
+      break;
+    }
+
     interpret(vm, line); 
     printf("\n");
   }
@@ -117,6 +125,10 @@ static InterpretResult run(VM *vm) {
 
     case OP_NEGATE:
       push_stack(vm, pop_stack(vm) * -1);
+      break;
+
+   case OP_POSITIVE:
+      push_stack(vm, pop_stack(vm));
       break;
 
     case OP_ADD:

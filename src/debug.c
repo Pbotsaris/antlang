@@ -4,14 +4,21 @@
 #include "utils.h"
 #include "values.h"
 
+#include <stdarg.h>
 #include <stdio.h>
 
 static void disassemble_chunk(Chunk *chunk, const char *name);
 static int disassemble_instruction(Chunk *chunk, int offset);
+static void trace_parsing(const char *func_name, int32_t depth,
+                          const char *format, ...);
+static void trace_tokens(Token prev, Token current, int32_t depth);
+static void trace_token(Token token, const char *name, int32_t depth);
 
 DebugAPI ant_debug = {
     .disassemble_chunk = disassemble_chunk,
     .disassemble_instruction = disassemble_instruction,
+    .trace_parsing = trace_parsing,
+    .trace_tokens = trace_tokens,
 };
 
 /* helpers */
@@ -20,7 +27,7 @@ static int32_t print_constant_instruction(const char *name, Chunk *chunk,
                                           int32_t offset);
 
 static void disassemble_chunk(Chunk *chunk, const char *name) {
-  printf("-- %s --\n", name);
+  printf("== %s ==\n", name);
 
   for (int offset = 0; offset < chunk->count;) {
     offset = disassemble_instruction(chunk, offset);
@@ -29,13 +36,53 @@ static void disassemble_chunk(Chunk *chunk, const char *name) {
   printf("\n");
 }
 
+static void trace_parsing(const char *func_name, int32_t depth,
+                          const char *format, ...) {
+
+  va_list args;
+  va_start(args, format);
+
+  for (int32_t i = 0; i < depth; i++) {
+    printf("  ");
+  }
+
+  printf("%s(", func_name);
+  vprintf(format, args);
+  printf(")\n");
+
+  va_end(args);
+}
+
+static void trace_tokens(Token prev, Token current, int32_t depth) {
+  trace_token(prev, "prev", depth);
+  trace_token(current, "current", depth);
+  printf("\n");
+}
+
+static void trace_token(Token token, const char *name, int32_t depth) {
+
+  for (int32_t i = 0; i < depth; i++) {
+    printf("  ");
+  }
+
+  if (token.start == NULL) {
+     printf("%s%-*s[ NULL ]%s\n", COLOR_CYAN, 10, name, COLOR_RESET);
+     return;
+  }
+
+  printf("%s%-*s", COLOR_CYAN, 10, name);
+  ant_token.print(token);
+  printf("%s", COLOR_RESET);
+}
+
 /* Helpers */
 static int32_t disassemble_instruction(Chunk *chunk, int offset) {
   printf("%04d ", offset);
 
   int32_t chunk_line = ant_line.get(&chunk->lines, offset);
 
-  bool same_line = offset > 0 && chunk_line == ant_line.get(&chunk->lines, offset - 1);
+  bool same_line =
+      offset > 0 && chunk_line == ant_line.get(&chunk->lines, offset - 1);
 
   if (same_line)
     printf("   | ");
@@ -50,6 +97,9 @@ static int32_t disassemble_instruction(Chunk *chunk, int offset) {
 
   case OP_NEGATE:
     return print_instruction("OP_NEGATE", offset);
+
+  case OP_POSITIVE:
+    return print_instruction("OP_POSITIVE", offset);
 
   case OP_ADD:
     return print_instruction("OP_ADD", offset);
@@ -80,7 +130,8 @@ static int32_t print_instruction(const char *name, int offset) {
   return offset + 1;
 }
 
-static int print_constant_instruction(const char *name, Chunk *chunk, int offset) {
+static int print_constant_instruction(const char *name, Chunk *chunk,
+                                      int offset) {
   int32_t const_index = 0;
   int32_t operand_offset = 0;
 

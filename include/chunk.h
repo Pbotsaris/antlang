@@ -8,6 +8,7 @@
 typedef enum {
   OP_RETURN,        /* no operand */
   OP_NEGATE,        /* no operand */
+  OP_POSITIVE,      /* no operand */
   OP_ADD,           /* no operand */
   OP_SUBTRACT,      /* no operand */
   OP_MULTIPLY,      /* no operand */
