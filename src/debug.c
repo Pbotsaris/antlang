@@ -76,7 +76,7 @@ static int32_t disassemble_instruction(Chunk *chunk, int offset) {
 }
 
 static int32_t print_instruction(const char *name, int offset) {
-  printf("%s ", name);
+  printf("%-*s ", 10, name);
   return offset + 1;
 }
 
