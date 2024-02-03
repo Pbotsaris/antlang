@@ -2,7 +2,7 @@
 #include "config.h"
 #include "lines.h"
 #include "utils.h"
-#include "values.h"
+#include "value_array.h"
 
 #include <stdarg.h>
 #include <stdio.h>
@@ -122,6 +122,18 @@ static int32_t disassemble_instruction(Chunk *chunk, int offset) {
   case OP_TRUE:
     return print_instruction("OP_TRUE", offset);
 
+  case OP_NOT:
+    return print_instruction("OP_NOT", offset);
+
+  case OP_EQUAL:
+    return print_instruction("OP_EQUAL", offset);
+
+  case OP_GREATER:
+    return print_instruction("OP_GREATER", offset);
+
+  case OP_LESS:
+    return print_instruction("OP_LESS", offset);
+
   case OP_CONSTANT:
     return print_constant_instruction("OP_CONSTANT", chunk, offset);
 
@@ -163,7 +175,7 @@ static int print_constant_instruction(const char *name, Chunk *chunk,
     return offset + operand_offset;
   }
 
-  ant_values.print(chunk->constants.values[const_index]);
+  ant_value.print(chunk->constants.values[const_index]);
 
   return offset + operand_offset;
 }

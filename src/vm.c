@@ -5,7 +5,7 @@
 #include "debug.h"
 #include "lines.h"
 #include "utils.h"
-#include "values.h"
+#include "value_array.h"
 
 #include <stdarg.h>
 #include <stdio.h>
@@ -107,15 +107,15 @@ static InterpretResult run(VM *vm) {
 #define READ_BYTE() (*vm->ip++)
 #define READ_CONSTANT() (vm->chunk->constants.values[READ_BYTE()])
 
-#define BINARY_OP(op)                                                          \
+#define BINARY_OP(value_type, op)                                              \
   do {                                                                         \
     if (invalid_binary_op(vm)) {                                               \
       runtime_error(vm, "Operands must be numbers");                           \
       return INTERPRET_RUNTIME_ERROR;                                          \
     }                                                                          \
-    double b = ant_value.to_number(pop_stack(vm));                             \
-    double a = ant_value.to_number(pop_stack(vm));                             \
-    push_stack(vm, ant_value.from_number(a op b));                             \
+    double b = ant_value.to_c_number(pop_stack(vm));                           \
+    double a = ant_value.to_c_number(pop_stack(vm));                           \
+    push_stack(vm, value_type(a op b));                                        \
   } while (false)
 
   for (;;) {
@@ -132,7 +132,7 @@ static InterpretResult run(VM *vm) {
 
     switch ((instruction = READ_BYTE())) {
     case OP_RETURN:
-      ant_values.print(pop_stack(vm));
+      ant_value.print(pop_stack(vm));
       return INTERPRET_OK;
 
     case OP_NEGATE: {
@@ -142,8 +142,8 @@ static InterpretResult run(VM *vm) {
         return INTERPRET_RUNTIME_ERROR;
       }
 
-      double num = ant_value.to_number(pop_stack(vm));
-      Value val = (ant_value.from_number(num * -1));
+      double num = ant_value.to_c_number(pop_stack(vm));
+      Value val = (ant_value.from_c_number(num * -1));
       push_stack(vm, val);
       break;
     }
@@ -153,31 +153,51 @@ static InterpretResult run(VM *vm) {
       break;
 
     case OP_ADD:
-      BINARY_OP(+);
+      BINARY_OP(ant_value.from_c_number, +);
       break;
 
     case OP_SUBTRACT:
-      BINARY_OP(-);
+      BINARY_OP(ant_value.from_c_number, -);
       break;
 
     case OP_MULTIPLY:
-      BINARY_OP(*);
+      BINARY_OP(ant_value.from_c_number, *);
       break;
 
     case OP_DIVIDE:
-      BINARY_OP(/);
+      BINARY_OP(ant_value.from_c_number, /);
       break;
 
+    case OP_GREATER:
+      BINARY_OP(ant_value.from_c_bool, >);
+      break;
+
+    case OP_LESS:
+      BINARY_OP(ant_value.from_c_bool, <);
+      break;
+
+    case OP_EQUAL: {
+      Value a = pop_stack(vm);
+      Value b = pop_stack(vm);
+      push_stack(vm, ant_value.equals(b, a));
+      break;
+    }
+
     case OP_FALSE:
-      push_stack(vm, ant_value.from_bool(false));
+      push_stack(vm, ant_value.from_c_bool(false));
       break;
 
     case OP_NIL:
-      push_stack(vm, ant_value.from_nil());
+      push_stack(vm, ant_value.as_nil());
       break;
 
+    case OP_NOT: {
+      Value value = ant_value.is_falsey(pop_stack(vm));
+      push_stack(vm, value);
+      break;
+    }
     case OP_TRUE:
-      push_stack(vm, ant_value.from_bool(true));
+      push_stack(vm, ant_value.from_c_bool(true));
       break;
 
     case OP_CONSTANT:
@@ -189,7 +209,7 @@ static InterpretResult run(VM *vm) {
       double constant = ant_utils.unpack_int32(bytes, CONST_24BITS);
       vm->ip += CONST_24BITS;
 
-      push_stack(vm, ant_value.from_number(constant));
+      push_stack(vm, ant_value.from_c_number(constant));
       break;
     }
     }
@@ -245,7 +265,7 @@ static void print_stack(VM *vm) {
   printf("        ");
   for (Value *slot = vm->stack; slot < vm->stack_top; slot++) {
     printf("[");
-    ant_values.print(*slot);
+    ant_value.print(*slot);
     printf("]");
   }
   printf("\n");

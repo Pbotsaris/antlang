@@ -2,7 +2,7 @@
 #define ANT_CHUNK_H
 #include "common.h"
 #include "lines.h"
-#include "values.h"
+#include "value_array.h"
 #include "config.h"
 
 typedef enum {
@@ -16,6 +16,10 @@ typedef enum {
   OP_NIL,           /* no operand */
   OP_TRUE,          /* no operand */
   OP_FALSE,         /* no operand */
+  OP_NOT,           /* no operand */
+  OP_EQUAL,         /* no operand */
+  OP_GREATER,       /* no operand */
+  OP_LESS,          /* no operand */
   OP_CONSTANT,      /* 8-bit operand */
   OP_CONSTANT_LONG, /* 24-bit operand */
 } OpCode;

@@ -3,14 +3,13 @@
 
 #include "compiler.h"
 
-
 #if defined(DEBUG_PRINT_CODE) || defined(DEBUG_TRACE_PARSER)
 #include "debug.h"
 #endif
 
 #define TRACE_PARSER_ENTER(fmt, ...)
 #define TRACE_PARSER_TOKEN(prev, current)
-#define TRACE_PARSER_EXIT()                                                    
+#define TRACE_PARSER_EXIT()
 
 #ifdef DEBUG_TRACE_PARSER
 static int32_t trace_depth = 0;
@@ -36,12 +35,10 @@ static int32_t trace_depth = 0;
 
 #define TRACE_PARSER_TOKEN(prev, current)                                      \
   do {                                                                         \
-    ant_debug.trace_tokens(prev, current, trace_depth);                         \
+    ant_debug.trace_tokens(prev, current, trace_depth);                        \
   } while (0)
 
 #endif
-
-
 
 /* Public */
 static Compiler *new_compiler(void);
@@ -95,14 +92,14 @@ ParseRule rules[] = {
     [TOKEN_SEMICOLON] = {NULL, NULL, PREC_NONE},
     [TOKEN_SLASH] = {NULL, binary, PREC_FACTOR},
     [TOKEN_STAR] = {NULL, binary, PREC_FACTOR},
-    [TOKEN_BANG] = {NULL, NULL, PREC_NONE},
-    [TOKEN_BANG_EQUAL] = {NULL, NULL, PREC_NONE},
+    [TOKEN_BANG] = {unary, NULL, PREC_NONE},
     [TOKEN_EQUAL] = {NULL, NULL, PREC_NONE},
-    [TOKEN_EQUAL_EQUAL] = {NULL, NULL, PREC_NONE},
-    [TOKEN_GREATER] = {NULL, NULL, PREC_NONE},
-    [TOKEN_GREATER_EQUAL] = {NULL, NULL, PREC_NONE},
-    [TOKEN_LESS] = {NULL, NULL, PREC_NONE},
-    [TOKEN_LESS_EQUAL] = {NULL, NULL, PREC_NONE},
+    [TOKEN_BANG_EQUAL] = {NULL, binary, PREC_COMPARISON},
+    [TOKEN_EQUAL_EQUAL] = {NULL, binary, PREC_EQUALITY},
+    [TOKEN_GREATER] = {NULL, binary, PREC_COMPARISON},
+    [TOKEN_GREATER_EQUAL] = {NULL, binary, PREC_COMPARISON},
+    [TOKEN_LESS] = {NULL, binary, PREC_COMPARISON},
+    [TOKEN_LESS_EQUAL] = {NULL, binary, PREC_COMPARISON},
     [TOKEN_IDENTIFIER] = {NULL, NULL, PREC_NONE},
     [TOKEN_STRING] = {NULL, NULL, PREC_NONE},
     [TOKEN_NUMBER] = {number, NULL, PREC_NONE},
@@ -141,6 +138,7 @@ static void emit_constant(Compiler *compiler, Value value);
 
 /* Emitting bytecode */
 static void emit_byte(Compiler *compiler, uint8_t byte);
+static void emit_two_bytes(Compiler *compiler, uint8_t byte1, uint8_t byte2);
 static void emit_constant_byte(Compiler *compiler, Value value);
 ;
 
@@ -172,7 +170,8 @@ static Compiler *new_compiler(void) {
   compiler->scanner = ant_scanner.new();
   compiler->parser = parser;
 
-  compiler->parser->current = (Token){.length = -1, .line = -1, .type = TOKEN_EOF, .start = NULL};
+  compiler->parser->current =
+      (Token){.length = -1, .line = -1, .type = TOKEN_EOF, .start = NULL};
   compiler->parser->prev = compiler->parser->current;
 
   return compiler;
@@ -257,16 +256,16 @@ static void expression(Compiler *compiler) {
   /* start with the lowest presedence */
   parse_pressedence(compiler, PREC_ASSIGNMENT);
 
-TRACE_PARSER_EXIT();
+  TRACE_PARSER_EXIT();
 }
 
 /**/
 
 static void parse_pressedence(Compiler *compiler, Presedence presedence) {
-TRACE_PARSER_ENTER("Compiler *compiler = %p, Presedence presedence = %s",
+  TRACE_PARSER_ENTER("Compiler *compiler = %p, Presedence presedence = %s",
                      compiler, precedence_name(presedence));
 
-TRACE_PARSER_TOKEN(compiler->parser->prev, compiler->parser->current);
+  TRACE_PARSER_TOKEN(compiler->parser->prev, compiler->parser->current);
 
   next_token(compiler);
 
@@ -292,37 +291,36 @@ TRACE_PARSER_TOKEN(compiler->parser->prev, compiler->parser->current);
     infix_rule(compiler);
   }
 
-TRACE_PARSER_EXIT();
+  TRACE_PARSER_EXIT();
 }
 
 static void number(Compiler *compiler) {
-TRACE_PARSER_ENTER("Compiler *compiler = %p", compiler);
-TRACE_PARSER_TOKEN(compiler->parser->prev, compiler->parser->current);
+  TRACE_PARSER_ENTER("Compiler *compiler = %p", compiler);
+  TRACE_PARSER_TOKEN(compiler->parser->prev, compiler->parser->current);
 
   double number = strtod(compiler->parser->prev.start, NULL);
-  emit_constant(compiler, ant_value.from_number(number));
+  emit_constant(compiler, ant_value.from_c_number(number));
 
-TRACE_PARSER_EXIT();
+  TRACE_PARSER_EXIT();
 }
-
 
 /**/
 
 static void grouping(Compiler *compiler) {
-TRACE_PARSER_ENTER("Compiler *compiler = %p", compiler);
-TRACE_PARSER_TOKEN(compiler->parser->prev, compiler->parser->current);
+  TRACE_PARSER_ENTER("Compiler *compiler = %p", compiler);
+  TRACE_PARSER_TOKEN(compiler->parser->prev, compiler->parser->current);
 
   expression(compiler);
   consume(compiler, TOKEN_RIGHT_PAREN, "Expect ')' after expression.");
 
-TRACE_PARSER_EXIT();
+  TRACE_PARSER_EXIT();
 }
 
 /**/
 
 static void unary(Compiler *compiler) {
-TRACE_PARSER_ENTER("Compiler *compiler = %p", compiler);
-TRACE_PARSER_TOKEN(compiler->parser->prev, compiler->parser->current);
+  TRACE_PARSER_ENTER("Compiler *compiler = %p", compiler);
+  TRACE_PARSER_TOKEN(compiler->parser->prev, compiler->parser->current);
 
   TokenType operator_type = compiler->parser->prev.type;
 
@@ -335,61 +333,68 @@ TRACE_PARSER_TOKEN(compiler->parser->prev, compiler->parser->current);
     emit_byte(compiler, OP_NEGATE);
   case TOKEN_PLUS:
     emit_byte(compiler, OP_POSITIVE);
+  case TOKEN_BANG:
+    emit_byte(compiler, OP_NOT);
     break;
 
   default:
     return; /* unreachable */
   }
 
-TRACE_PARSER_EXIT();
+  TRACE_PARSER_EXIT();
 }
 /**/
 
 static void binary(Compiler *compiler) {
-TRACE_PARSER_ENTER("Compiler *compiler = %p", compiler);
-TRACE_PARSER_TOKEN(compiler->parser->prev, compiler->parser->current);
+  TRACE_PARSER_ENTER("Compiler *compiler = %p", compiler);
+  TRACE_PARSER_TOKEN(compiler->parser->prev, compiler->parser->current);
 
   TokenType operator_type = compiler->parser->prev.type;
   ParseRule *rule = get_rule(operator_type);
 
-  /* call parse presendence with one level higher because binary operators are
-   * left associative */
+  /* call parse presendence with one level higher because binary operators are left associative */
   parse_pressedence(compiler, (Presedence)(rule->presedence + 1));
 
   switch (operator_type) {
-  case TOKEN_PLUS:
-    emit_byte(compiler, OP_ADD);
+   case TOKEN_PLUS:        emit_byte(compiler, OP_ADD); break;
+   case TOKEN_MINUS:       emit_byte(compiler, OP_SUBTRACT); break;
+   case TOKEN_STAR:        emit_byte(compiler, OP_MULTIPLY); break;
+   case TOKEN_SLASH:       emit_byte(compiler, OP_DIVIDE); break;
+   case TOKEN_EQUAL_EQUAL: emit_byte(compiler, OP_EQUAL); break;
+   case TOKEN_GREATER:     emit_byte(compiler, OP_GREATER); break;
+   case TOKEN_LESS:        emit_byte(compiler, OP_LESS); break;
+   case TOKEN_BANG_EQUAL:  emit_two_bytes(compiler, OP_LESS, OP_NOT); break;
+   /* because a <= b  is the same as !(a > b) */
+   case TOKEN_LESS_EQUAL:  emit_two_bytes(compiler, OP_GREATER, OP_NOT); break;
+   /* because a >= b  is the same as !(a < b) */
+   case TOKEN_GREATER_EQUAL: emit_two_bytes(compiler, OP_LESS, OP_NOT); break;
+   default: return; /* unreachable */
+  }
+
+  TRACE_PARSER_EXIT();
+}
+
+/* */
+
+static void literal(Compiler *compiler) {
+  TRACE_PARSER_ENTER("Compiler *compiler = %p", compiler);
+  TRACE_PARSER_TOKEN(compiler->parser->prev, compiler->parser->current);
+
+  switch (compiler->parser->prev.type) {
+  case TOKEN_FALSE:
+    emit_byte(compiler, OP_FALSE);
     break;
-  case TOKEN_MINUS:
-    emit_byte(compiler, OP_SUBTRACT);
+  case TOKEN_NIL:
+    emit_byte(compiler, OP_NIL);
     break;
-  case TOKEN_STAR:
-    emit_byte(compiler, OP_MULTIPLY);
-    break;
-  case TOKEN_SLASH:
-    emit_byte(compiler, OP_DIVIDE);
+  case TOKEN_TRUE:
+    emit_byte(compiler, OP_TRUE);
     break;
   default:
     return; /* unreachable */
   }
 
-TRACE_PARSER_EXIT();
-}
-
-/* */
-
-static void literal(Compiler *compiler){
-TRACE_PARSER_ENTER("Compiler *compiler = %p", compiler);
-TRACE_PARSER_TOKEN(compiler->parser->prev, compiler->parser->current);
-
-switch(compiler->parser->prev.type){
-   case TOKEN_FALSE: emit_byte(compiler, OP_FALSE); break;
-   case TOKEN_NIL: emit_byte(compiler, OP_NIL); break;                
-   case TOKEN_TRUE: emit_byte(compiler, OP_TRUE); break;
-   default: return; /* unreachable */
-}
-
-TRACE_PARSER_EXIT();
+  TRACE_PARSER_EXIT();
 }
 
 /**/
@@ -421,6 +426,14 @@ static void emit_byte(Compiler *compiler, uint8_t byte) {
 }
 
 /**/
+
+static void emit_two_bytes(Compiler *compiler, uint8_t byte1, uint8_t byte2) {
+  int32_t line = compiler->parser->prev.line;
+  ant_chunk.write(compiler->current_chunk, byte1, line);
+  ant_chunk.write(compiler->current_chunk, byte2, line);
+}
+
+/* */
 
 static void error(Parser *parser, const char *message) {
   error_at(parser, message);
@@ -465,7 +478,6 @@ static void error_at(Parser *parser, const char *message) {
 static void reset_parser(Parser *parser) {
   parser->panic_mode = false;
   parser->was_error = false;
-
 }
 
 /**/

@@ -22,7 +22,7 @@ static void init_chunk(Chunk *chunk) {
   chunk->capacity = 0;
   chunk->code = NULL;
   ant_line.init(&chunk->lines);
-  ant_values.init(&chunk->constants);
+  ant_value_array.init(&chunk->constants);
 }
 
 static void write_chunk(Chunk *chunk, uint8_t byte, int32_t line) {
@@ -45,14 +45,14 @@ static void free_chunk(Chunk *chunk) {
 
   FREE_ARRAY(uint8_t, chunk->code, chunk->capacity);
   ant_line.free(&chunk->lines);
-  ant_values.free(&chunk->constants);
+  ant_value_array.free(&chunk->constants);
   init_chunk(chunk);
 }
 
 static bool write_constant(Chunk *chunk, Value constant, int32_t line) {
 
   int32_t constant_index = chunk->constants.count;
-  ant_values.write(&chunk->constants, constant);
+  ant_value_array.write(&chunk->constants, constant);
 
   /* if we can get away with 8bits, use the more efficient OP_CONSTANT */
   if (constant_index < CONST_MAX_8BITS_VALUE) {
