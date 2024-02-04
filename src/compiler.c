@@ -430,7 +430,7 @@ void string(Compiler *compiler){
    const char *chars    = parser->prev.start + 1; // skip the first quote
    int32_t length       = parser->prev.length - 2; // skip the first and last quote
    ObjectString *string = ant_string.make(chars, length);
-   Value value          = ant_value.make_object((Object*)string);
+   Value value          = ant_value.make_object(ant_string.as_object(string));
 
    emit_constant(compiler, value);
 }

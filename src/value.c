@@ -125,7 +125,10 @@ static Value equals(Value a, Value b) {
     return value_from_bool(a.as.number == b.as.number);
 
    case VAL_OBJECT:
-    return value_from_bool(ant_object.equals(a,b));
+    /* we can do this because our strings are all internalized 
+     * So we can compare memory addreses
+     */
+    return value_from_bool(a.as.object == b.as.object);
 
   default:
     return value_from_bool(false); /* unreachable */

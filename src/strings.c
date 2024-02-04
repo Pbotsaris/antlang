@@ -1,7 +1,7 @@
 #include "strings.h"
 #include "memory.h"
-#include <stdio.h>
 
+#include <stdio.h>
 #include <string.h>
 static ObjectString *to_obj_string(Value value);
 static ObjectString *make_string(const char *chars, int length);
@@ -9,7 +9,6 @@ static ObjectString *concat_string(Value a, Value b);
 static char *value_as_cstring(Value value);
 static void print_string(Value value);
 static Object *as_object(ObjectString *string);
-static bool equals(Value a, Value b);
 static void free_strings(void);
 
 StringAPI ant_string = {
@@ -20,7 +19,6 @@ StringAPI ant_string = {
     .from_value       = to_obj_string,
     .print            = print_string,
     .as_object        = as_object,
-    .equals           = equals,
 };
 
 Table strings = {.count = 0, .capacity = 0, .entries = NULL};
@@ -99,14 +97,6 @@ Object *as_object(ObjectString *string) { return (Object *)string; }
 
 /* */
 
-static bool equals(Value a, Value b) {
-  ObjectString *sa = to_obj_string(a);
-  ObjectString *sb = to_obj_string(b);
-  return sa->length == sb->length && memcmp(sa->chars, sb->chars, sa->length) == 0;
-}
-
-/* */
-
 static ObjectString *allocate_string(char *chars, int32_t length, uint32_t hash) {
   ObjectString *str = (ObjectString *)ant_object.allocate(sizeof(ObjectString), OBJ_STRING);
 
@@ -115,8 +105,8 @@ static ObjectString *allocate_string(char *chars, int32_t length, uint32_t hash)
   str->hash = hash;
   
   // using table as a set, do not need to store value
-  return str;
   ant_table.set(&strings, str, ant_value.make_nil());
+  return str;
 }
 
 /* FNV Hash: http://www.isthe.com/chongo/tech/comp/fnv/ */

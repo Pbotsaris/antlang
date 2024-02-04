@@ -11,7 +11,6 @@ static bool is_string(Value value);
 
 static bool is_object_type(Value value, ObjectType type);
 static void print_object(Value value);
-static bool equals(Value a, Value b);
 
 static Object *allocate_object(size_t size, ObjectType object_type);
 static void free_object(Object *object);
@@ -20,7 +19,6 @@ ObjectAPI ant_object = {
     .type = get_type,
     .is_string = is_string,
     .print = print_object,
-    .equals = equals,
     .allocate = allocate_object,
     .free = free_object,
 };
@@ -60,20 +58,6 @@ static void print_object(Value value) {
     break; // Unreachable
   }
 }
-
-/* */
-
-static bool equals(Value a, Value b) {
-  if (get_type(a) != get_type(b))
-    return false;
-
-  switch (get_type(a)) {
-  case OBJ_STRING:
-    return ant_string.equals(a, b);
-    break;
-  }
-}
-
 
 // FIX: Strings leave in a hash table now
 static void free_object(Object *object) {

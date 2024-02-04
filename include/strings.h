@@ -24,7 +24,6 @@ typedef struct {
    ObjectString*  (*from_value)       (Value value);
    void           (*print)            (Value value);
    Object*        (*as_object)        (ObjectString* string);
-   bool           (*equals)           (Value a, Value b);
 }StringAPI;
 
 extern StringAPI ant_string;
