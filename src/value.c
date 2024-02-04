@@ -50,7 +50,7 @@ static Value value_from_number(double value) {
 /* */
 
 static Value value_from_nil() {
-  return (Value){.type = VAL_NUMBER, .as.number = 0};
+  return (Value){.type = VAL_NIL, .as.number = 0};
 }
 
 /* */

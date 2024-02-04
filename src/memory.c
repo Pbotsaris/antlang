@@ -44,14 +44,15 @@ static Object* add_object(Object *object) {
    return object;
 }
 
+// FIX: Strings leave in a hash table now
 static void free_objects(){
-   Object *head = garbage.objects;
-
-   while (head != NULL) {
-      Object *next = head->next;
-      ant_object.free(head);
-      head = next;
-   }
-   garbage.objects = NULL;
+//   Object *head = garbage.objects;
+//
+//   while (head != NULL) {
+//      Object *next = head->next;
+//      ant_object.free(head);
+//      head = next;
+//   }
+//   garbage.objects = NULL;
 }
 

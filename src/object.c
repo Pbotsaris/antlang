@@ -74,12 +74,14 @@ static bool equals(Value a, Value b) {
   }
 }
 
+
+// FIX: Strings leave in a hash table now
 static void free_object(Object *object) {
   switch (object->type) {
   case OBJ_STRING: {
-    ObjectString *string = (ObjectString *)object;
-    FREE_ARRAY(char, string->chars, string->length + 1);
-    FREE(ObjectString, string);
+    //ObjectString *string = (ObjectString *)object;
+    //FREE_ARRAY(char, string->chars, string->length + 1);
+    //FREE(ObjectString, string);
   }
   }
 }

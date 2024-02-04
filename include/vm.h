@@ -12,12 +12,11 @@ typedef enum {
 
 
 typedef struct VM{
-   Chunk*      chunk;                    /**< chunk of bytecode instructions */
-   uint8_t*    ip;                       /**< instruction pointer */
-    // TODO: Dynamic or static stack?
-   Value      stack[OPTION_STACK_MAX];  /**< The stack used by the interpreter. */
-   Value*     stack_top;                /**< The top of the stack. Points to the next available slot */
-   Compiler*  compiler;                 /**< The compiler used by the interpreter. */
+   Chunk*      chunk;               
+   uint8_t*    ip;                   
+   Value       stack[OPTION_STACK_MAX]; //TODO: make this dynamic
+   Value*      stack_top;            
+   Compiler*   compiler;            
 }VM;
 
 typedef struct VM_API{

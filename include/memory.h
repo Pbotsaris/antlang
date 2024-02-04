@@ -2,9 +2,8 @@
 #define ANT_MEMORY_H
 
 #include "common.h"
+#include "config.h"
 #include "object.h"
-
-#define MIN_CHUNK_CAPACITY 8
 
 typedef struct {
    Object* objects;
@@ -19,7 +18,7 @@ typedef struct {
 extern MemoryAPI ant_memory;
 
 #define GROW_CAPACITY(capacity) \
-   ((capacity) < MIN_CHUNK_CAPACITY ? MIN_CHUNK_CAPACITY : (capacity) *2)
+   ((capacity) < OPTION_ARRAY_MIN_CAPACITY ? OPTION_ARRAY_MIN_CAPACITY : (capacity) * OPTION_ARRAY_GROW_FACTOR)
 
 #define GROW_ARRAY(type, pointer, old_capacity, new_capacity) \
    (type*)ant_memory.realloc(pointer, (sizeof(type)) *(old_capacity), (sizeof(type)) *(new_capacity))

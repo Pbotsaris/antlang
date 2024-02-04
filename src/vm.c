@@ -22,10 +22,10 @@ static void repl(VM *vm);
 static void free_vm(VM *vm);
 
 AntVMAPI ant_vm = {
-    .new = new_vm,
-    .free = free_vm,
+    .new       = new_vm,
+    .free      = free_vm,
     .interpret = interpret,
-    .repl = repl,
+    .repl      = repl,
 };
 
 /* VM */
@@ -61,6 +61,7 @@ static VM *new_vm() {
 }
 
 static InterpretResult interpret(VM *vm, const char *source) {
+
   Chunk chunk;
   ant_chunk.init(&chunk);
 
@@ -107,6 +108,7 @@ static void repl(VM *vm) {
 static void free_vm(VM *vm) {
   ant_compiler.free(vm->compiler);
   ant_memory.free_objects();
+  ant_string.free_all();
   free(vm);
 }
 
