@@ -6,6 +6,9 @@
 #include "lines.h"
 #include "utils.h"
 #include "value_array.h"
+#include "object.h"
+#include "strings.h"
+#include "memory.h"
 
 #include <stdarg.h>
 #include <stdio.h>
@@ -36,7 +39,8 @@ static Value pop_stack(VM *vm);
 static void print_stack(VM *vm);
 static Value peek_stack(VM *vm, int32_t distance);
 
-static bool invalid_binary_op(VM *vm);
+static bool is_numeric_binary_op(VM *vm);
+static bool is_string_binary_op(VM *vm);
 
 /* Implementation */
 static VM *new_vm() {
@@ -48,9 +52,11 @@ static VM *new_vm() {
   }
 
   reset_stack(vm);
-  vm->chunk = NULL;
-  vm->ip = NULL;
+
+  vm->chunk    = NULL;
+  vm->ip       = NULL;
   vm->compiler = ant_compiler.new();
+
   return vm;
 }
 
@@ -100,6 +106,7 @@ static void repl(VM *vm) {
 
 static void free_vm(VM *vm) {
   ant_compiler.free(vm->compiler);
+  ant_memory.free_objects();
   free(vm);
 }
 
@@ -109,12 +116,12 @@ static InterpretResult run(VM *vm) {
 
 #define BINARY_OP(value_type, op)                                              \
   do {                                                                         \
-    if (invalid_binary_op(vm)) {                                               \
+    if (!is_numeric_binary_op(vm)) {                                           \
       runtime_error(vm, "Operands must be numbers");                           \
       return INTERPRET_RUNTIME_ERROR;                                          \
     }                                                                          \
-    double b = ant_value.to_c_number(pop_stack(vm));                           \
-    double a = ant_value.to_c_number(pop_stack(vm));                           \
+    double b = ant_value.as_number(pop_stack(vm));                             \
+    double a = ant_value.as_number(pop_stack(vm));                             \
     push_stack(vm, value_type(a op b));                                        \
   } while (false)
 
@@ -142,8 +149,8 @@ static InterpretResult run(VM *vm) {
         return INTERPRET_RUNTIME_ERROR;
       }
 
-      double num = ant_value.to_c_number(pop_stack(vm));
-      Value val = (ant_value.from_c_number(num * -1));
+      double num = ant_value.as_number(pop_stack(vm));
+      Value val = (ant_value.make_number(num * -1));
       push_stack(vm, val);
       break;
     }
@@ -152,28 +159,38 @@ static InterpretResult run(VM *vm) {
       push_stack(vm, pop_stack(vm));
       break;
 
-    case OP_ADD:
-      BINARY_OP(ant_value.from_c_number, +);
+    case OP_ADD: {
+
+      if(is_string_binary_op(vm)){
+         Value b = pop_stack(vm);
+         Value a = pop_stack(vm);
+         ObjectString* str = ant_string.concat(a, b);
+         push_stack(vm, ant_value.make_object(ant_string.as_object(str)));
+         break;
+      }
+
+      BINARY_OP(ant_value.make_number, +);
       break;
+      }
 
     case OP_SUBTRACT:
-      BINARY_OP(ant_value.from_c_number, -);
+      BINARY_OP(ant_value.make_number, -);
       break;
 
     case OP_MULTIPLY:
-      BINARY_OP(ant_value.from_c_number, *);
+      BINARY_OP(ant_value.make_number, *);
       break;
 
     case OP_DIVIDE:
-      BINARY_OP(ant_value.from_c_number, /);
+      BINARY_OP(ant_value.make_number, /);
       break;
 
     case OP_GREATER:
-      BINARY_OP(ant_value.from_c_bool, >);
+      BINARY_OP(ant_value.make_bool, >);
       break;
 
     case OP_LESS:
-      BINARY_OP(ant_value.from_c_bool, <);
+      BINARY_OP(ant_value.make_bool, <);
       break;
 
     case OP_EQUAL: {
@@ -184,11 +201,11 @@ static InterpretResult run(VM *vm) {
     }
 
     case OP_FALSE:
-      push_stack(vm, ant_value.from_c_bool(false));
+      push_stack(vm, ant_value.make_bool(false));
       break;
 
     case OP_NIL:
-      push_stack(vm, ant_value.as_nil());
+      push_stack(vm, ant_value.make_nil());
       break;
 
     case OP_NOT: {
@@ -197,7 +214,7 @@ static InterpretResult run(VM *vm) {
       break;
     }
     case OP_TRUE:
-      push_stack(vm, ant_value.from_c_bool(true));
+      push_stack(vm, ant_value.make_bool(true));
       break;
 
     case OP_CONSTANT:
@@ -209,7 +226,7 @@ static InterpretResult run(VM *vm) {
       double constant = ant_utils.unpack_int32(bytes, CONST_24BITS);
       vm->ip += CONST_24BITS;
 
-      push_stack(vm, ant_value.from_c_number(constant));
+      push_stack(vm, ant_value.make_number(constant));
       break;
     }
     }
@@ -275,7 +292,12 @@ static Value peek_stack(VM *vm, int32_t distance) {
   return vm->stack_top[-1 - distance];
 }
 
-static bool invalid_binary_op(VM *vm) {
-  return !ant_value.is_number(peek_stack(vm, 0)) ||
-         !ant_value.is_number(peek_stack(vm, 1));
+static bool is_numeric_binary_op(VM *vm) {
+  return ant_value.is_number(peek_stack(vm, 0)) &&
+         ant_value.is_number(peek_stack(vm, 1));
+}
+
+static bool is_string_binary_op(VM *vm){
+   return ant_object.is_string(peek_stack(vm, 0)) &&
+          ant_object.is_string(peek_stack(vm,1));
 }

@@ -2,6 +2,8 @@
 #include <stdlib.h>
 
 #include "compiler.h"
+#include "object.h"
+#include "strings.h"
 
 #if defined(DEBUG_PRINT_CODE) || defined(DEBUG_TRACE_PARSER)
 #include "debug.h"
@@ -59,6 +61,7 @@ static void grouping(Compiler *compiler);
 static void unary(Compiler *compiler);
 static void binary(Compiler *compiler);
 static void literal(Compiler *compiler);
+static void string(Compiler *compiler);
 
 /* Parser Rules */
 
@@ -101,7 +104,7 @@ ParseRule rules[] = {
     [TOKEN_LESS] = {NULL, binary, PREC_COMPARISON},
     [TOKEN_LESS_EQUAL] = {NULL, binary, PREC_COMPARISON},
     [TOKEN_IDENTIFIER] = {NULL, NULL, PREC_NONE},
-    [TOKEN_STRING] = {NULL, NULL, PREC_NONE},
+    [TOKEN_STRING] = {string, NULL, PREC_NONE},
     [TOKEN_NUMBER] = {number, NULL, PREC_NONE},
     [TOKEN_AND] = {NULL, NULL, PREC_NONE},
     [TOKEN_CLASS] = {NULL, NULL, PREC_NONE},
@@ -170,8 +173,7 @@ static Compiler *new_compiler(void) {
   compiler->scanner = ant_scanner.new();
   compiler->parser = parser;
 
-  compiler->parser->current =
-      (Token){.length = -1, .line = -1, .type = TOKEN_EOF, .start = NULL};
+  compiler->parser->current = (Token){.length = -1, .line = -1, .type = TOKEN_EOF, .start = NULL};
   compiler->parser->prev = compiler->parser->current;
 
   return compiler;
@@ -212,16 +214,18 @@ static void free_compiler(Compiler *compiler) {
 /* Private */
 
 static void next_token(Compiler *compiler) {
-  compiler->parser->prev = compiler->parser->current;
+
+  Parser *parser = compiler->parser;
+  parser->prev = parser->current;
 
   while (true) {
-    compiler->parser->current = ant_scanner.scan_token(compiler->scanner);
+     parser->current = ant_scanner.scan_token(compiler->scanner);
 
-    if (compiler->parser->current.type != TOKEN_ERROR) {
+    if (parser->current.type != TOKEN_ERROR) {
       break;
     }
 
-    error_at_current(compiler->parser, compiler->parser->current.start);
+    error_at_current(parser, parser->current.start);
   }
 }
 
@@ -229,12 +233,14 @@ static void next_token(Compiler *compiler) {
 
 static void consume(Compiler *compiler, TokenType type, const char *message) {
 
-  if (compiler->parser->current.type == type) {
+  Parser *parser = compiler->parser;
+
+  if (parser->current.type == type) {
     next_token(compiler);
     return;
   }
 
-  error_at_current(compiler->parser, message);
+  error_at_current(parser, message);
 }
 
 /**/
@@ -250,8 +256,11 @@ static void end_of_compilation(Compiler *compiler) {
 /**/
 
 static void expression(Compiler *compiler) {
+
+   Parser *parser = compiler->parser;
+
   TRACE_PARSER_ENTER("Compiler *compiler = %p", compiler);
-  TRACE_PARSER_TOKEN(compiler->parser->prev, compiler->parser->current);
+  TRACE_PARSER_TOKEN(parser->prev, parser->current);
 
   /* start with the lowest presedence */
   parse_pressedence(compiler, PREC_ASSIGNMENT);
@@ -262,14 +271,18 @@ static void expression(Compiler *compiler) {
 /**/
 
 static void parse_pressedence(Compiler *compiler, Presedence presedence) {
+
+   Parser *parser = compiler->parser;
+
   TRACE_PARSER_ENTER("Compiler *compiler = %p, Presedence presedence = %s",
                      compiler, precedence_name(presedence));
 
-  TRACE_PARSER_TOKEN(compiler->parser->prev, compiler->parser->current);
+  TRACE_PARSER_TOKEN(parser->prev, parser->current);
+
 
   next_token(compiler);
 
-  TokenType prev_type = compiler->parser->prev.type;
+  TokenType prev_type = parser->prev.type;
   ParserFunc prefix_rule = get_rule(prev_type)->prefix;
 
   // the first token should always belong to a prefix expression
@@ -282,10 +295,10 @@ static void parse_pressedence(Compiler *compiler, Presedence presedence) {
 
   // we only parse infix expressions if the current token has a higher
   // presedence than what was passed to parse_pressedence
-  while (presedence <= get_rule(compiler->parser->current.type)->presedence) {
+  while (presedence <= get_rule(parser->current.type)->presedence) {
     next_token(compiler);
 
-    TokenType prev_type = compiler->parser->prev.type;
+    TokenType prev_type = parser->prev.type;
     ParserFunc infix_rule = get_rule(prev_type)->infix;
 
     infix_rule(compiler);
@@ -295,11 +308,14 @@ static void parse_pressedence(Compiler *compiler, Presedence presedence) {
 }
 
 static void number(Compiler *compiler) {
-  TRACE_PARSER_ENTER("Compiler *compiler = %p", compiler);
-  TRACE_PARSER_TOKEN(compiler->parser->prev, compiler->parser->current);
 
-  double number = strtod(compiler->parser->prev.start, NULL);
-  emit_constant(compiler, ant_value.from_c_number(number));
+  Parser *parser = compiler->parser;
+
+  TRACE_PARSER_ENTER("Compiler *compiler = %p", compiler);
+  TRACE_PARSER_TOKEN(parser->prev, parser->current);
+
+  double number = strtod(parser->prev.start, NULL);
+  emit_constant(compiler, ant_value.make_number(number));
 
   TRACE_PARSER_EXIT();
 }
@@ -319,14 +335,16 @@ static void grouping(Compiler *compiler) {
 /**/
 
 static void unary(Compiler *compiler) {
-  TRACE_PARSER_ENTER("Compiler *compiler = %p", compiler);
-  TRACE_PARSER_TOKEN(compiler->parser->prev, compiler->parser->current);
 
-  TokenType operator_type = compiler->parser->prev.type;
+  Parser *parser = compiler->parser;
+ 
+  TRACE_PARSER_ENTER("Compiler *compiler = %p", compiler);
+  TRACE_PARSER_TOKEN(parser->prev, parser->current);
+
+  TokenType operator_type = parser->prev.type;
 
   // expression(compiler);
   parse_pressedence(compiler, PREC_UNARY);
-
   switch (operator_type) {
 
   case TOKEN_MINUS:
@@ -346,10 +364,13 @@ static void unary(Compiler *compiler) {
 /**/
 
 static void binary(Compiler *compiler) {
-  TRACE_PARSER_ENTER("Compiler *compiler = %p", compiler);
-  TRACE_PARSER_TOKEN(compiler->parser->prev, compiler->parser->current);
 
-  TokenType operator_type = compiler->parser->prev.type;
+  Parser *parser = compiler->parser;
+
+  TRACE_PARSER_ENTER("Compiler *compiler = %p", compiler);
+  TRACE_PARSER_TOKEN(parser->prev, parser->current);
+
+  TokenType operator_type = parser->prev.type;
   ParseRule *rule = get_rule(operator_type);
 
   /* call parse presendence with one level higher because binary operators are left associative */
@@ -377,10 +398,11 @@ static void binary(Compiler *compiler) {
 /* */
 
 static void literal(Compiler *compiler) {
+  Parser *parser = compiler->parser;
   TRACE_PARSER_ENTER("Compiler *compiler = %p", compiler);
-  TRACE_PARSER_TOKEN(compiler->parser->prev, compiler->parser->current);
+  TRACE_PARSER_TOKEN(parser->prev, parser->current);
 
-  switch (compiler->parser->prev.type) {
+  switch (parser->prev.type) {
   case TOKEN_FALSE:
     emit_byte(compiler, OP_FALSE);
     break;
@@ -395,6 +417,22 @@ static void literal(Compiler *compiler) {
   }
 
   TRACE_PARSER_EXIT();
+}
+
+/**/
+
+// TODO STOP ON 19.4
+
+void string(Compiler *compiler){
+
+   Parser *parser = compiler->parser;
+
+   const char *chars    = parser->prev.start + 1; // skip the first quote
+   int32_t length       = parser->prev.length - 2; // skip the first and last quote
+   ObjectString *string = ant_string.make(chars, length);
+   Value value          = ant_value.make_object(ant_string.as_object(string));
+
+   emit_constant(compiler, value);
 }
 
 /**/

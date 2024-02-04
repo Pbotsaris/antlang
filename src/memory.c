@@ -1,6 +1,18 @@
 #include "memory.h"
 #include <stdlib.h>
 
+GarbageCollection garbage = {.objects = NULL};
+
+static void *reallocate(void *pointer, size_t old_size, size_t new_size);
+static Object* add_object(Object *object);
+static void    free_objects(void);
+
+MemoryAPI ant_memory = {
+    .add_object = add_object,
+    .free_objects = free_objects,
+    .realloc = reallocate,
+};
+
 /*
    old_size  	new_size	               Operation
    -------- 	--------	               -----------
@@ -10,7 +22,7 @@
    Non‑zero  	Larger than old_size	   Grow existing allocation.
 */
 
-void *reallocate(void *pointer, size_t old_size, size_t new_size) {
+static void *reallocate(void *pointer, size_t old_size, size_t new_size) {
   if (new_size == 0) {
     free(pointer);
     return NULL;
@@ -24,3 +36,22 @@ void *reallocate(void *pointer, size_t old_size, size_t new_size) {
 
   return ptr;
 }
+
+static Object* add_object(Object *object) {
+   /* add to the front  */
+   object->next = garbage.objects;
+   garbage.objects = object;
+   return object;
+}
+
+static void free_objects(){
+   Object *head = garbage.objects;
+
+   while (head != NULL) {
+      Object *next = head->next;
+      ant_object.free(head);
+      head = next;
+   }
+   garbage.objects = NULL;
+}
+
