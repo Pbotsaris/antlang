@@ -20,6 +20,7 @@ typedef enum {
   OP_EQUAL,         /* no operand */
   OP_GREATER,       /* no operand */
   OP_LESS,          /* no operand */
+  OP_PRINT,         /* no operand */
   OP_CONSTANT,      /* 8-bit operand */
   OP_CONSTANT_LONG, /* 24-bit operand */
 } OpCode;

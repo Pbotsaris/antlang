@@ -4,11 +4,11 @@
 #include "config.h"
 #include "debug.h"
 #include "lines.h"
-#include "utils.h"
-#include "value_array.h"
+#include "memory.h"
 #include "object.h"
 #include "strings.h"
-#include "memory.h"
+#include "utils.h"
+#include "value_array.h"
 
 #include <stdarg.h>
 #include <stdio.h>
@@ -22,10 +22,10 @@ static void repl(VM *vm);
 static void free_vm(VM *vm);
 
 AntVMAPI ant_vm = {
-    .new       = new_vm,
-    .free      = free_vm,
+    .new = new_vm,
+    .free = free_vm,
     .interpret = interpret,
-    .repl      = repl,
+    .repl = repl,
 };
 
 /* VM */
@@ -53,8 +53,8 @@ static VM *new_vm() {
 
   reset_stack(vm);
 
-  vm->chunk    = NULL;
-  vm->ip       = NULL;
+  vm->chunk = NULL;
+  vm->ip = NULL;
   vm->compiler = ant_compiler.new();
 
   return vm;
@@ -140,8 +140,8 @@ static InterpretResult run(VM *vm) {
     uint8_t instruction;
 
     switch ((instruction = READ_BYTE())) {
+
     case OP_RETURN:
-      ant_value.print(pop_stack(vm));
       return INTERPRET_OK;
 
     case OP_NEGATE: {
@@ -152,7 +152,7 @@ static InterpretResult run(VM *vm) {
       }
 
       double num = ant_value.as_number(pop_stack(vm));
-      Value val = (ant_value.make_number(num * -1));
+      Value val = ant_value.make_number(num * -1);
       push_stack(vm, val);
       break;
     }
@@ -163,17 +163,17 @@ static InterpretResult run(VM *vm) {
 
     case OP_ADD: {
 
-      if(is_string_binary_op(vm)){
-         Value b = pop_stack(vm);
-         Value a = pop_stack(vm);
-         ObjectString* str = ant_string.concat(a, b);
-         push_stack(vm, ant_value.make_object(ant_string.as_object(str)));
-         break;
+      if (is_string_binary_op(vm)) {
+        Value b = pop_stack(vm);
+        Value a = pop_stack(vm);
+        ObjectString *str = ant_string.concat(a, b);
+        push_stack(vm, ant_value.make_object(ant_string.as_object(str)));
+        break;
       }
 
       BINARY_OP(ant_value.make_number, +);
       break;
-      }
+    }
 
     case OP_SUBTRACT:
       BINARY_OP(ant_value.make_number, -);
@@ -218,6 +218,13 @@ static InterpretResult run(VM *vm) {
     case OP_TRUE:
       push_stack(vm, ant_value.make_bool(true));
       break;
+
+    case OP_PRINT: {
+      Value value = pop_stack(vm);
+      ant_value.print(value);
+      printf("\n");
+      break;
+    }
 
     case OP_CONSTANT:
       push_stack(vm, READ_CONSTANT());
@@ -299,7 +306,7 @@ static bool is_numeric_binary_op(VM *vm) {
          ant_value.is_number(peek_stack(vm, 1));
 }
 
-static bool is_string_binary_op(VM *vm){
-   return ant_object.is_string(peek_stack(vm, 0)) &&
-          ant_object.is_string(peek_stack(vm,1));
+static bool is_string_binary_op(VM *vm) {
+  return ant_object.is_string(peek_stack(vm, 0)) &&
+         ant_object.is_string(peek_stack(vm, 1));
 }

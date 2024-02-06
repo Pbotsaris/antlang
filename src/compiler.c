@@ -55,6 +55,11 @@ AntCompilerAPI ant_compiler = {
 
 /* Parsing */
 
+static void declaration(Compiler *compiler);
+static void statement(Compiler *compiler);
+
+static void print_statement(Compiler *compiler);
+
 static void expression(Compiler *compiler);
 static void number(Compiler *compiler);
 static void grouping(Compiler *compiler);
@@ -126,7 +131,6 @@ ParseRule rules[] = {
     [TOKEN_EOF] = {NULL, NULL, PREC_NONE},
 };
 
-static ParseRule *get_rule(TokenType type) { return &rules[type]; }
 
 static void parse_pressedence(Compiler *compile, Presedence presedence);
 
@@ -136,7 +140,6 @@ static void consume(Compiler *compiler, TokenType type, const char *message);
 static void end_of_compilation(Compiler *compiler);
 
 /* Emitting Opcodes and values */
-static void emit_return(Compiler *compiler);
 static void emit_constant(Compiler *compiler, Value value);
 
 /* Emitting bytecode */
@@ -153,6 +156,9 @@ static void error_at_current(Parser *parser, const char *message);
 /* utils */
 static void reset_parser(Parser *parser);
 static const char *precedence_name(Presedence presedence);
+static bool match(Compiler *compiler, TokenType type);
+static bool check(Compiler *compiler, TokenType type);
+static ParseRule *get_rule(TokenType type);
 
 /* Compiler API */
 static Compiler *new_compiler(void) {
@@ -179,6 +185,19 @@ static Compiler *new_compiler(void) {
   return compiler;
 }
 
+
+/**/
+
+static void free_compiler(Compiler *compiler) {
+  if (compiler == NULL)
+    return;
+
+  ant_scanner.free(compiler->scanner);
+  free(compiler->parser);
+  free(compiler);
+}
+
+
 /**/
 
 static bool compile(Compiler *compiler, const char *source, Chunk *chunk) {
@@ -192,68 +211,59 @@ static bool compile(Compiler *compiler, const char *source, Chunk *chunk) {
 #endif
 
   next_token(compiler);
-  expression(compiler);
 
-  consume(compiler, TOKEN_EOF, "Expect end of expression.");
+  while(!match(compiler, TOKEN_EOF)){
+     declaration(compiler);
+  }
+
   end_of_compilation(compiler);
-
   return !compiler->parser->was_error;
 }
 
-/**/
 
-static void free_compiler(Compiler *compiler) {
-  if (compiler == NULL)
-    return;
+static void declaration(Compiler * compiler){
+   Parser *parser = compiler->parser;
 
-  ant_scanner.free(compiler->scanner);
-  free(compiler->parser);
-  free(compiler);
+  TRACE_PARSER_ENTER("Compiler *compiler = %p", compiler);
+  TRACE_PARSER_TOKEN(parser->prev, parser->current);
+
+   statement(compiler);
+
+   TRACE_PARSER_EXIT();
 }
 
-/* Private */
+static void statement(Compiler *compiler){
 
-static void next_token(Compiler *compiler) {
+   Parser *parser = compiler->parser;
+  TRACE_PARSER_ENTER("Compiler *compiler = %p", compiler);
+  TRACE_PARSER_TOKEN(parser->prev, parser->current);
+
+
+   if(match(compiler, TOKEN_PRINT)){
+      print_statement(compiler);
+   }
+
+   TRACE_PARSER_EXIT();
+}
+
+
+static void print_statement(Compiler *compiler){
 
   Parser *parser = compiler->parser;
-  parser->prev = parser->current;
+  TRACE_PARSER_ENTER("Compiler *compiler = %p", compiler);
+  TRACE_PARSER_TOKEN(parser->prev, parser->current);
 
-  while (true) {
-     parser->current = ant_scanner.scan_token(compiler->scanner);
 
-    if (parser->current.type != TOKEN_ERROR) {
-      break;
-    }
+   // parse expression first so when print is called there's a value on top of the stack
+   expression(compiler);
 
-    error_at_current(parser, parser->current.start);
-  }
+   //TODO: Maybe remove semicolon from the language
+   consume(compiler, TOKEN_SEMICOLON, "Expected ';' after value");
+   emit_byte(compiler, OP_PRINT);
+
+  TRACE_PARSER_EXIT();
 }
 
-/**/
-
-static void consume(Compiler *compiler, TokenType type, const char *message) {
-
-  Parser *parser = compiler->parser;
-
-  if (parser->current.type == type) {
-    next_token(compiler);
-    return;
-  }
-
-  error_at_current(parser, message);
-}
-
-/**/
-
-static void end_of_compilation(Compiler *compiler) {
-  emit_return(compiler);
-
-#ifdef DEBUG_PRINT_CODE
-  ant_debug.disassemble_chunk(compiler->current_chunk, "code");
-#endif
-}
-
-/**/
 
 static void expression(Compiler *compiler) {
 
@@ -343,7 +353,6 @@ static void unary(Compiler *compiler) {
 
   TokenType operator_type = parser->prev.type;
 
-  // expression(compiler);
   parse_pressedence(compiler, PREC_UNARY);
   switch (operator_type) {
 
@@ -435,9 +444,48 @@ void string(Compiler *compiler){
    emit_constant(compiler, value);
 }
 
+
+/* Compilation steps */
+
+static void next_token(Compiler *compiler) {
+
+  Parser *parser = compiler->parser;
+  parser->prev = parser->current;
+
+  while (true) {
+     parser->current = ant_scanner.scan_token(compiler->scanner);
+
+    if (parser->current.type != TOKEN_ERROR) {
+      break;
+    }
+
+    error_at_current(parser, parser->current.start);
+  }
+}
+
 /**/
 
-static void emit_return(Compiler *compiler) { emit_byte(compiler, OP_RETURN); }
+static void consume(Compiler *compiler, TokenType type, const char *message) {
+
+  Parser *parser = compiler->parser;
+
+  if (parser->current.type == type) {
+    next_token(compiler);
+    return;
+  }
+
+  error_at_current(parser, message);
+}
+
+/**/
+
+static void end_of_compilation(Compiler *compiler) {
+   emit_byte(compiler, OP_RETURN);
+
+#ifdef DEBUG_PRINT_CODE
+  ant_debug.disassemble_chunk(compiler->current_chunk, "code");
+#endif
+}
 
 /**/
 
@@ -516,6 +564,24 @@ static void error_at(Parser *parser, const char *message) {
 static void reset_parser(Parser *parser) {
   parser->panic_mode = false;
   parser->was_error = false;
+}
+
+/**/
+
+static ParseRule *get_rule(TokenType type){ return &rules[type]; }
+
+/* */
+
+static bool match(Compiler *compiler, TokenType type){
+   if(!check(compiler, type)) return false;
+
+   next_token(compiler);
+   return true;
+}
+
+
+static bool check(Compiler *compiler, TokenType type){
+   return compiler->parser->current.type == type;
 }
 
 /**/

@@ -92,6 +92,7 @@ static int32_t disassemble_instruction(Chunk *chunk, int offset) {
   uint8_t instruction = chunk->code[offset];
 
   switch (instruction) {
+
   case OP_RETURN:
     return print_instruction("OP_RETURN", offset);
 
@@ -133,6 +134,9 @@ static int32_t disassemble_instruction(Chunk *chunk, int offset) {
 
   case OP_LESS:
     return print_instruction("OP_LESS", offset);
+
+   case OP_PRINT:
+    return print_instruction("OP_PRINT", offset);
 
   case OP_CONSTANT:
     return print_constant_instruction("OP_CONSTANT", chunk, offset);
