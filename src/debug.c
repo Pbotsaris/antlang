@@ -9,8 +9,7 @@
 
 static void disassemble_chunk(Chunk *chunk, const char *name);
 static int disassemble_instruction(Chunk *chunk, int offset);
-static void trace_parsing(const char *func_name, int32_t depth,
-                          const char *format, ...);
+static void trace_parsing(const char *func_name, int32_t depth, const char *format, ...);
 static void trace_tokens(Token prev, Token current, int32_t depth);
 static void trace_token(Token token, const char *name, int32_t depth);
 
@@ -23,8 +22,8 @@ DebugAPI ant_debug = {
 
 /* helpers */
 static int32_t print_instruction(const char *name, int32_t offset);
-static int32_t print_constant_instruction(const char *name, Chunk *chunk,
-                                          int32_t offset);
+static int32_t print_constant_instruction(const char *name, Chunk *chunk, int32_t offset);
+static bool is_long_constant(uint8_t opcode);
 
 static void disassemble_chunk(Chunk *chunk, const char *name) {
   printf("== %s ==\n", name);
@@ -147,6 +146,12 @@ static int32_t disassemble_instruction(Chunk *chunk, int offset) {
   case OP_DEFINE_GLOBAL_LONG:
     return print_constant_instruction("OP_DEFINE_GLOBAL_LONG", chunk, offset);
 
+   case OP_GET_GLOBAL:
+    return print_constant_instruction("OP_GET_GLOBAL", chunk, offset);
+
+   case OP_GET_GLOBAL_LONG:
+    return print_constant_instruction("OP_GET_GLOBAL_LONG", chunk, offset);
+
   case OP_CONSTANT:
     return print_constant_instruction("OP_CONSTANT", chunk, offset);
 
@@ -169,7 +174,7 @@ static int print_constant_instruction(const char *name, Chunk *chunk, int offset
   int32_t operand_offset = 0;
 
   /* putting 24 bits together to get the constant index */
-  if (chunk->code[offset] == OP_CONSTANT_LONG || chunk->code[offset] == OP_DEFINE_GLOBAL_LONG) {
+  if (is_long_constant(chunk->code[offset])) {
     uint8_t *operand_bytes = chunk->code + offset + 1;
     const_index = ant_utils.unpack_int32(operand_bytes, CONST_24BITS);
     operand_offset = 1 + CONST_24BITS; // 1 opcode + 3 operands
@@ -190,4 +195,10 @@ static int print_constant_instruction(const char *name, Chunk *chunk, int offset
   ant_value.print(chunk->constants.values[const_index]);
 
   return offset + operand_offset;
+}
+
+
+static bool is_long_constant(uint8_t opcode) {
+  return opcode == OP_CONSTANT_LONG || opcode == OP_DEFINE_GLOBAL_LONG ||
+         opcode == OP_GET_GLOBAL_LONG;
 }

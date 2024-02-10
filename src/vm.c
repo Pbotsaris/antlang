@@ -39,6 +39,9 @@ static Value pop_stack(VM *vm);
 static void print_stack(VM *vm);
 static Value peek_stack(VM *vm, int32_t distance);
 
+/* OP Helpeers */
+static bool get_global(VM *vm, ObjectString *name);
+static int32_t read_24bit_operand(VM *vm);
 static bool is_numeric_binary_op(VM *vm);
 static bool is_string_binary_op(VM *vm);
 
@@ -116,6 +119,10 @@ static void free_vm(VM *vm) {
 static InterpretResult run(VM *vm) {
 #define READ_CHUNK_BYTE() (*vm->ip++)
 #define READ_CHUNK_CONSTANT() (vm->chunk->constants.values[READ_CHUNK_BYTE()])
+#define READ_CHUNK_LONG_CONSTANT()                                             \
+  (vm->chunk->constants.values[read_24bit_operand(vm)])
+
+  for (;;) {
 
 #define BINARY_OP(value_type, op)                                              \
   do {                                                                         \
@@ -128,155 +135,206 @@ static InterpretResult run(VM *vm) {
     push_stack(vm, value_type(a op b));                                        \
   } while (false)
 
-  for (;;) {
+    for (;;) {
 
 #ifdef DEBUG_TRACE_EXECUTION
-    print_stack(vm);
+      print_stack(vm);
 
-    /* address to index, get the relative offset */
-    int32_t offset = (int32_t)(vm->ip - vm->chunk->code);
-    ant_debug.disassemble_instruction(vm->chunk, offset);
+      /* address to index, get the relative offset */
+      int32_t offset = (int32_t)(vm->ip - vm->chunk->code);
+      ant_debug.disassemble_instruction(vm->chunk, offset);
 #endif
 
-    uint8_t instruction;
+      uint8_t instruction;
 
-    switch ((instruction = READ_CHUNK_BYTE())) {
+      switch ((instruction = READ_CHUNK_BYTE())) {
 
-    case OP_RETURN:
-      return INTERPRET_OK;
+      case OP_RETURN:
+        return INTERPRET_OK;
 
-    case OP_NEGATE: {
+      case OP_NEGATE: {
 
-      if (!ant_value.is_number(peek_stack(vm, 0))) {
-        runtime_error(vm, "Operand must be a number");
-        return INTERPRET_RUNTIME_ERROR;
-      }
+        if (!ant_value.is_number(peek_stack(vm, 0))) {
+          runtime_error(vm, "Operand must be a number");
+          return INTERPRET_RUNTIME_ERROR;
+        }
 
-      double num = ant_value.as_number(pop_stack(vm));
-      Value val = ant_value.from_number(num * -1);
-      push_stack(vm, val);
-      break;
-    }
-
-    case OP_POSITIVE:
-      push_stack(vm, pop_stack(vm));
-      break;
-
-    case OP_ADD: {
-
-      if (is_string_binary_op(vm)) {
-        Value b = pop_stack(vm);
-        Value a = pop_stack(vm);
-        ObjectString *str = ant_string.concat(a, b);
-        push_stack(vm, ant_value.from_object(ant_string.as_object(str)));
+        double num = ant_value.as_number(pop_stack(vm));
+        Value val = ant_value.from_number(num * -1);
+        push_stack(vm, val);
         break;
       }
 
-      BINARY_OP(ant_value.from_number, +);
-      break;
-    }
+      case OP_POSITIVE:
+        push_stack(vm, pop_stack(vm));
+        break;
 
-    case OP_SUBTRACT:
-      BINARY_OP(ant_value.from_number, -);
-      break;
+      case OP_ADD: {
+        if (is_string_binary_op(vm)) {
+          Value b = pop_stack(vm);
+          Value a = pop_stack(vm);
+          ObjectString *str = ant_string.concat(a, b);
+          push_stack(vm, ant_value.from_object(ant_string.as_object(str)));
+          break;
+        }
 
-    case OP_MULTIPLY:
-      BINARY_OP(ant_value.from_number, *);
-      break;
+        BINARY_OP(ant_value.from_number, +);
+        break;
+      }
 
-    case OP_DIVIDE:
-      BINARY_OP(ant_value.from_number, /);
-      break;
+      case OP_SUBTRACT:
+        BINARY_OP(ant_value.from_number, -);
+        break;
 
-    case OP_GREATER:
-      BINARY_OP(ant_value.from_bool, >);
-      break;
+      case OP_MULTIPLY:
+        BINARY_OP(ant_value.from_number, *);
+        break;
 
-    case OP_LESS:
-      BINARY_OP(ant_value.from_bool, <);
-      break;
+      case OP_DIVIDE:
+        BINARY_OP(ant_value.from_number, /);
+        break;
 
-    case OP_EQUAL: {
-      Value a = pop_stack(vm);
-      Value b = pop_stack(vm);
-      push_stack(vm, ant_value.equals(b, a));
-      break;
-    }
+      case OP_GREATER:
+        BINARY_OP(ant_value.from_bool, >);
+        break;
 
-    case OP_FALSE:
-      push_stack(vm, ant_value.from_bool(false));
-      break;
+      case OP_LESS:
+        BINARY_OP(ant_value.from_bool, <);
+        break;
 
-    case OP_NIL:
-      push_stack(vm, ant_value.make_nil());
-      break;
+      case OP_EQUAL: {
+        Value a = pop_stack(vm);
+        Value b = pop_stack(vm);
+        push_stack(vm, ant_value.equals(b, a));
+        break;
+      }
 
-    case OP_NOT: {
-      Value value = ant_value.is_falsey(pop_stack(vm));
-      push_stack(vm, value);
-      break;
-    }
-    case OP_TRUE:
-      push_stack(vm, ant_value.from_bool(true));
-      break;
+      case OP_FALSE:
+        push_stack(vm, ant_value.from_bool(false));
+        break;
 
-    case OP_PRINT: {
-      Value value = pop_stack(vm);
-      ant_value.print(value);
-      printf("\n");
-      break;
-    }
+      case OP_NIL:
+        push_stack(vm, ant_value.make_nil());
+        break;
 
-      /* OP_POP discards the top value from the stack */
-    case OP_POP: {
-      pop_stack(vm);
-      break;
-    }
+      case OP_NOT: {
+        Value value = ant_value.is_falsey(pop_stack(vm));
+        push_stack(vm, value);
+        break;
+      }
+      case OP_TRUE:
+        push_stack(vm, ant_value.from_bool(true));
+        break;
 
-    case OP_DEFINE_GLOBAL: {
-      ObjectString *name = ant_string.from_value(READ_CHUNK_CONSTANT());
-      Value value        = pop_stack(vm);
+      case OP_PRINT: {
+        Value value = pop_stack(vm);
+        ant_value.print(value);
+        printf("\n");
+        break;
+      }
 
-      printf("Defining global\n Name:  ");
-      ant_string.print(name);
-      printf("\n Value: ");
-      ant_value.print(value);
-      printf("\n");
+        /* OP_POP discards the top value from the stack */
+      case OP_POP: {
+        pop_stack(vm);
+        break;
+      }
 
-      ant_table.set(&vm->globals, name, value);
-      break;
-    }
+      case OP_DEFINE_GLOBAL: {
+        ObjectString *name = ant_string.from_value(READ_CHUNK_CONSTANT());
+        ant_table.set(&vm->globals, name, pop_stack(vm));
+        break;
+      }
 
-    case OP_DEFINE_GLOBAL_LONG: {
-     uint8_t *bytes =  vm->ip;
-     int32_t index  = ant_utils.unpack_int32(bytes, CONST_24BITS);
-     vm->ip        += CONST_24BITS;
+      case OP_DEFINE_GLOBAL_LONG: {
+        ObjectString *name = ant_string.from_value(READ_CHUNK_LONG_CONSTANT());
+        ant_table.set(&vm->globals, name, pop_stack(vm));
+        break;
+      }
 
-     ObjectString *name = ant_string.from_value(vm->chunk->constants.values[index]);
-     Value value        = pop_stack(vm);
+      case OP_GET_GLOBAL: {
+        ObjectString *name = ant_string.from_value(READ_CHUNK_CONSTANT());
 
-     ant_table.set(&vm->globals, name, value);
-    }
+        if (!get_global(vm, name)) {
+          return INTERPRET_RUNTIME_ERROR;
+        }
 
-    case OP_CONSTANT:
-      push_stack(vm, READ_CHUNK_CONSTANT());
-      break;
+        break;
+      }
 
-    case OP_CONSTANT_LONG: {
-      uint8_t *bytes  = vm->ip;
-      double constant = (double)ant_utils.unpack_int32(bytes, CONST_24BITS);
-      vm->ip         += CONST_24BITS;
+      case OP_GET_GLOBAL_LONG: {
+        ObjectString *name = ant_string.from_value(READ_CHUNK_LONG_CONSTANT());
 
-      push_stack(vm, ant_value.from_number(constant));
-      break;
-    }
-    }
+        if (!get_global(vm, name)) {
+          return INTERPRET_RUNTIME_ERROR;
+        }
+
+        break;
+      }
+
+      case OP_CONSTANT:
+        push_stack(vm, READ_CHUNK_CONSTANT());
+        break;
+
+      case OP_CONSTANT_LONG: {
+        double constant = (double)read_24bit_operand(vm);
+        push_stack(vm, ant_value.from_number(constant));
+        break;
+      }
+      }
 
 #undef READ_CHUNK_BYTE
 #undef READ_CHUNK_CONSTANT
 #undef BINARY_OP
+    }
   }
 }
+
+
+/* Stack */
+
+static void reset_stack(VM *vm) { vm->stack_top = vm->stack; }
+
+/**/
+
+static void push_stack(VM *vm, Value value) {
+
+  int32_t stack_index = (int32_t)(vm->stack_top - vm->stack);
+
+  if (stack_index == OPTION_STACK_MAX) {
+    fprintf(stderr, "Stack overflow\n");
+    exit(11);
+  }
+
+  *(vm->stack_top) = value;
+  vm->stack_top++;
+}
+
+/**/
+
+static int32_t read_24bit_operand(VM *vm) {
+  uint8_t *bytes = vm->ip;
+  int32_t index = ant_utils.unpack_int32(bytes, CONST_24BITS);
+  vm->ip += CONST_24BITS;
+  return index;
+}
+
+/**/
+
+static bool get_global(VM *vm, ObjectString *name) {
+  Value value;
+
+  bool valid = ant_table.get(&vm->globals, name, &value);
+
+  if (!valid) {
+    runtime_error(vm, "Undefined variable '%s'", name->chars);
+    return false;
+  }
+
+  push_stack(vm, value);
+  return true;
+}
+
+/**/
 
 static void runtime_error(VM *vm, const char *format, ...) {
   va_list args;
@@ -293,20 +351,9 @@ static void runtime_error(VM *vm, const char *format, ...) {
   reset_stack(vm);
 }
 
-static void reset_stack(VM *vm) { vm->stack_top = vm->stack; }
 
-static void push_stack(VM *vm, Value value) {
 
-  int32_t stack_index = (int32_t)(vm->stack_top - vm->stack);
-
-  if (stack_index == OPTION_STACK_MAX) {
-    fprintf(stderr, "Stack overflow\n");
-    exit(11);
-  }
-
-  *(vm->stack_top) = value;
-  vm->stack_top++;
-}
+/**/
 
 static Value pop_stack(VM *vm) {
 
@@ -329,14 +376,21 @@ static void print_stack(VM *vm) {
   printf("\n");
 }
 
+/**/
+
 static Value peek_stack(VM *vm, int32_t distance) {
   return vm->stack_top[-1 - distance];
 }
+
+
+/**/
 
 static bool is_numeric_binary_op(VM *vm) {
   return ant_value.is_number(peek_stack(vm, 0)) &&
          ant_value.is_number(peek_stack(vm, 1));
 }
+
+/**/
 
 static bool is_string_binary_op(VM *vm) {
   return ant_object.is_string(peek_stack(vm, 0)) &&

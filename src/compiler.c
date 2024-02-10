@@ -54,10 +54,8 @@ AntCompilerAPI ant_compiler = {
 };
 
 /* Parsing */
-
 static void declaration(Compiler *compiler);
 static void variable_declaration(Compiler *compiler);
-
 static void statement(Compiler *compiler);
 static void print_statement(Compiler *compiler);
 static void expression_statement(Compiler *compiler);
@@ -67,6 +65,7 @@ static void number(Compiler *compiler);
 static void grouping(Compiler *compiler);
 static void unary(Compiler *compiler);
 static void binary(Compiler *compiler);
+static void variable(Compiler *compiler);
 static void literal(Compiler *compiler);
 static void string(Compiler *compiler);
 
@@ -110,7 +109,7 @@ ParseRule rules[] = {
     [TOKEN_GREATER_EQUAL] = {NULL, binary, PREC_COMPARISON},
     [TOKEN_LESS] = {NULL, binary, PREC_COMPARISON},
     [TOKEN_LESS_EQUAL] = {NULL, binary, PREC_COMPARISON},
-    [TOKEN_IDENTIFIER] = {NULL, NULL, PREC_NONE},
+    [TOKEN_IDENTIFIER] = {variable, NULL, PREC_NONE},
     [TOKEN_STRING] = {string, NULL, PREC_NONE},
     [TOKEN_NUMBER] = {number, NULL, PREC_NONE},
     [TOKEN_AND] = {NULL, NULL, PREC_NONE},
@@ -137,6 +136,7 @@ static void parse_pressedence(Compiler *compile, Presedence presedence);
 
 /* variables */
 static void define_variable(Compiler *compiler, int32_t index);
+static void named_variable(Compiler *compiler, Token name);
 static int32_t parse_variable(Compiler *compiler, const char *message);
 static int32_t make_identifier_constant(Compiler *compiler, Token *token);
 
@@ -148,7 +148,8 @@ static void synchronize(Compiler *compiler);
 
 /* Emitting Opcodes and values */
 static void emit_constant(Compiler *compiler, Value value);
-static void emit_global(Compiler *compiler, int32_t index);
+static void emit_define_global(Compiler *compiler, int32_t index);
+static void emit_get_global(Compiler *compiler, int32_t index);
 static void emit_byte(Compiler *compiler, uint8_t byte);
 static void emit_two_bytes(Compiler *compiler, uint8_t byte1, uint8_t byte2);
 
@@ -477,6 +478,15 @@ static void binary(Compiler *compiler) {
 }
 
 /* */
+static void variable(Compiler *compiler){
+   TRACE_PARSER_ENTER("Compiler *compiler = %p", compiler);
+   TRACE_PARSER_TOKEN(compiler->parser->prev, compiler->parser->current);
+
+   named_variable(compiler, compiler->parser->prev);
+   TRACE_PARSER_EXIT();
+}
+
+/* */
 
 static void literal(Compiler *compiler) {
   Parser *parser = compiler->parser;
@@ -524,12 +534,25 @@ static void define_variable(Compiler *compiler, int32_t index) {
   TRACE_PARSER_ENTER("Compiler *compiler = %p", compiler);
   TRACE_PARSER_TOKEN(parser->prev, parser->current);
 
-  emit_global(compiler, index);
+  emit_define_global(compiler, index);
 
   TRACE_PARSER_EXIT();
 }
 
-/**/
+/* */
+
+static void named_variable(Compiler *compiler, Token name) {
+  TRACE_PARSER_ENTER("Compiler *compiler = %p", compiler);
+  TRACE_PARSER_TOKEN(compiler->parser->prev, compiler->parser->current);
+
+   int32_t const_index = make_identifier_constant(compiler, &name);
+   emit_get_global(compiler, const_index);
+
+  TRACE_PARSER_EXIT();
+}
+
+
+/* */
 
 static int32_t parse_variable(Compiler *compiler, const char *message) {
   Parser *parser = compiler->parser;
@@ -643,13 +666,25 @@ static void emit_constant(Compiler *compiler, Value value) {
 
 /**/
 
-static void emit_global(Compiler *compiler, int32_t index) {
+static void emit_define_global(Compiler *compiler, int32_t index) {
   int32_t line = compiler->parser->prev.line;
-  bool valid  = ant_chunk.write_global(compiler->current_chunk, index, line);
+  bool valid  = ant_chunk.write_define_global(compiler->current_chunk, index, line);
 
   if (!valid) {
     error(compiler->parser, "Too many global variables in one chunk.");
   }
+}
+
+/**/
+
+static void emit_get_global(Compiler *compiler, int32_t index){
+   int32_t line = compiler->parser->prev.line;
+
+   bool valid = ant_chunk.write_get_global(compiler->current_chunk, index, line);
+
+   if(!valid){
+      error(compiler->parser, "Too many global variables in one chunk.");
+   }
 }
 
 /**/
