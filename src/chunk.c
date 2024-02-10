@@ -17,9 +17,10 @@ static void write_chunk(Chunk *chunk, uint8_t byte, int32_t line);
 static void free_chunk(Chunk *chunk);
 static int32_t add_constant(Chunk *chunk, Value value);
 static bool write_constant(Chunk *chunk, Value value, int32_t line);
-static bool write_define_global(Chunk *chunk, int32_t const_index,
-                                int32_t line);
+
+static bool write_define_global(Chunk *chunk, int32_t const_index, int32_t line);
 static bool write_get_global(Chunk *chunk, int32_t const_index, int32_t line);
+static bool write_set_global(Chunk *chunk, int32_t const_index, int32_t line);
 
 /* API */
 AntChunkAPI ant_chunk = {
@@ -30,6 +31,7 @@ AntChunkAPI ant_chunk = {
     .write_constant = write_constant,
     .write_define_global = write_define_global,
     .write_get_global = write_get_global,
+    .write_set_global = write_set_global,
 };
 
 /* Private */
@@ -102,7 +104,8 @@ static int32_t add_constant(Chunk *chunk, Value constant) {
 
 /* */
 
-static bool write_define_global(Chunk *chunk, int32_t const_index, int32_t line) {
+static bool write_define_global(Chunk *chunk, int32_t const_index,
+                                int32_t line) {
   WithOperandArgs args = {
       .op_8bit = OP_DEFINE_GLOBAL,
       .op_24bit = OP_DEFINE_GLOBAL_LONG,
@@ -117,6 +120,17 @@ static bool write_get_global(Chunk *chunk, int32_t const_index, int32_t line) {
   WithOperandArgs args = {
       .op_8bit = OP_GET_GLOBAL,
       .op_24bit = OP_GET_GLOBAL_LONG,
+      .const_index = const_index,
+      .line = line,
+  };
+
+  return write_chunk_with_operand(chunk, args);
+}
+
+static bool write_set_global(Chunk *chunk, int32_t const_index, int32_t line) {
+  WithOperandArgs args = {
+      .op_8bit = OP_SET_GLOBAL,
+      .op_24bit = OP_SET_GLOBAL_LONG,
       .const_index = const_index,
       .line = line,
   };

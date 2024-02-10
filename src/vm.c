@@ -41,6 +41,9 @@ static Value peek_stack(VM *vm, int32_t distance);
 
 /* OP Helpeers */
 static bool get_global(VM *vm, ObjectString *name);
+static bool define_global(VM *vm, ObjectString *name);
+static bool set_global(VM *vm, ObjectString *name);
+
 static int32_t read_24bit_operand(VM *vm);
 static bool is_numeric_binary_op(VM *vm);
 static bool is_string_binary_op(VM *vm);
@@ -241,33 +244,49 @@ static InterpretResult run(VM *vm) {
 
       case OP_DEFINE_GLOBAL: {
         ObjectString *name = ant_string.from_value(READ_CHUNK_CONSTANT());
-        ant_table.set(&vm->globals, name, pop_stack(vm));
+        bool valid         = define_global(vm, name);
+
+        if(!valid) return INTERPRET_RUNTIME_ERROR;
         break;
       }
 
       case OP_DEFINE_GLOBAL_LONG: {
-        ObjectString *name = ant_string.from_value(READ_CHUNK_LONG_CONSTANT());
-        ant_table.set(&vm->globals, name, pop_stack(vm));
+        ObjectString *name = ant_string.from_value(READ_CHUNK_CONSTANT());
+        bool valid         = define_global(vm, name);
+
+        if(!valid) return INTERPRET_RUNTIME_ERROR;
         break;
       }
 
       case OP_GET_GLOBAL: {
         ObjectString *name = ant_string.from_value(READ_CHUNK_CONSTANT());
+        bool valid         = get_global(vm, name);
 
-        if (!get_global(vm, name)) {
-          return INTERPRET_RUNTIME_ERROR;
-        }
-
+        if (!valid) return INTERPRET_RUNTIME_ERROR;
         break;
       }
 
       case OP_GET_GLOBAL_LONG: {
         ObjectString *name = ant_string.from_value(READ_CHUNK_LONG_CONSTANT());
+        bool valid         = get_global(vm, name);
 
-        if (!get_global(vm, name)) {
-          return INTERPRET_RUNTIME_ERROR;
-        }
+        if (!valid) return INTERPRET_RUNTIME_ERROR;
+        break;
+      }
 
+      case OP_SET_GLOBAL: {
+        ObjectString *name = ant_string.from_value(READ_CHUNK_CONSTANT());
+        bool valid = set_global(vm, name);
+
+        if(!valid) return INTERPRET_RUNTIME_ERROR;
+        break;
+      }
+
+     case OP_SET_GLOBAL_LONG: {
+        ObjectString *name = ant_string.from_value(READ_CHUNK_LONG_CONSTANT());
+        bool valid = set_global(vm, name);
+
+        if(!valid) return INTERPRET_RUNTIME_ERROR;
         break;
       }
 
@@ -288,7 +307,6 @@ static InterpretResult run(VM *vm) {
     }
   }
 }
-
 
 /* Stack */
 
@@ -320,6 +338,18 @@ static int32_t read_24bit_operand(VM *vm) {
 
 /**/
 
+static bool define_global(VM *vm, ObjectString *name){
+   bool is_new = ant_table.set(&vm->globals, name, pop_stack(vm));
+
+   if (!is_new) {
+      runtime_error(vm, "Variable '%s' already defined.", name->chars);;
+   }
+      
+   return is_new;
+}
+
+/**/
+
 static bool get_global(VM *vm, ObjectString *name) {
   Value value;
 
@@ -327,72 +357,86 @@ static bool get_global(VM *vm, ObjectString *name) {
 
   if (!valid) {
     runtime_error(vm, "Undefined variable '%s'", name->chars);
-    return false;
+    return valid;
   }
 
   push_stack(vm, value);
-  return true;
+  return valid;
 }
+
+static bool set_global(VM *vm, ObjectString *name) {
+   // note that we peek the stack here.
+   // assigment is an expression, so we need to keep the value on the stack.
+   // in case the assignment is part of a larger expression.
+   bool is_new = ant_table.set(&vm->globals, name, peek_stack(vm, 0));
+
+   // if we have a new key, it means user assigned to an undefined variable.
+   if (is_new) {
+      ant_table.delete(&vm->globals, name);
+      runtime_error(vm, "Undefined variable '%s'", name->chars);
+      return false;
+   }
+
+   return true;
+}
+
 
 /**/
 
 static void runtime_error(VM *vm, const char *format, ...) {
-  va_list args;
-  va_start(args, format);
-  vfprintf(stderr, format, args);
-  va_end(args);
-  fputs("\n", stderr);
+   va_list args;
+   va_start(args, format);
+   vfprintf(stderr, format, args);
+   va_end(args);
+   fputs("\n", stderr);
 
-  /* -1 because interpreter is one step ahead */
-  size_t instruction = vm->ip - vm->chunk->code - 1;
-  int32_t line = ant_line.get(&vm->chunk->lines, instruction);
+   /* -1 because interpreter is one step ahead */
+   size_t instruction = vm->ip - vm->chunk->code - 1;
+   int32_t line = ant_line.get(&vm->chunk->lines, instruction);
 
-  fprintf(stderr, "[line %d] in script\n", line);
-  reset_stack(vm);
+   fprintf(stderr, "[line %d] in script\n", line);
+   reset_stack(vm);
 }
-
-
 
 /**/
 
 static Value pop_stack(VM *vm) {
 
-  if (vm->stack_top == vm->stack) {
-    fprintf(stderr, "Stack underflow\n");
-    exit(11);
-  }
+   if (vm->stack_top == vm->stack) {
+      fprintf(stderr, "Stack underflow\n");
+      exit(11);
+   }
 
-  vm->stack_top--;
-  return *(vm->stack_top);
+   vm->stack_top--;
+   return *(vm->stack_top);
 }
 
 static void print_stack(VM *vm) {
-  printf("        ");
-  for (Value *slot = vm->stack; slot < vm->stack_top; slot++) {
-    printf("[");
-    ant_value.print(*slot);
-    printf("]");
-  }
-  printf("\n");
+   printf("        ");
+   for (Value *slot = vm->stack; slot < vm->stack_top; slot++) {
+      printf("[");
+      ant_value.print(*slot);
+      printf("]");
+   }
+   printf("\n");
 }
 
 /**/
 
 static Value peek_stack(VM *vm, int32_t distance) {
-  return vm->stack_top[-1 - distance];
+   return vm->stack_top[-1 - distance];
 }
-
 
 /**/
 
 static bool is_numeric_binary_op(VM *vm) {
-  return ant_value.is_number(peek_stack(vm, 0)) &&
-         ant_value.is_number(peek_stack(vm, 1));
+   return ant_value.is_number(peek_stack(vm, 0)) &&
+      ant_value.is_number(peek_stack(vm, 1));
 }
 
 /**/
 
 static bool is_string_binary_op(VM *vm) {
-  return ant_object.is_string(peek_stack(vm, 0)) &&
-         ant_object.is_string(peek_stack(vm, 1));
+   return ant_object.is_string(peek_stack(vm, 0)) &&
+      ant_object.is_string(peek_stack(vm, 1));
 }

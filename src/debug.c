@@ -9,7 +9,8 @@
 
 static void disassemble_chunk(Chunk *chunk, const char *name);
 static int disassemble_instruction(Chunk *chunk, int offset);
-static void trace_parsing(const char *func_name, int32_t depth, const char *format, ...);
+static void trace_parsing(const char *func_name, int32_t depth,
+                          const char *format, ...);
 static void trace_tokens(Token prev, Token current, int32_t depth);
 static void trace_token(Token token, const char *name, int32_t depth);
 
@@ -22,7 +23,8 @@ DebugAPI ant_debug = {
 
 /* helpers */
 static int32_t print_instruction(const char *name, int32_t offset);
-static int32_t print_constant_instruction(const char *name, Chunk *chunk, int32_t offset);
+static int32_t print_constant_instruction(const char *name, Chunk *chunk,
+                                          int32_t offset);
 static bool is_long_constant(uint8_t opcode);
 
 static void disassemble_chunk(Chunk *chunk, const char *name) {
@@ -146,11 +148,17 @@ static int32_t disassemble_instruction(Chunk *chunk, int offset) {
   case OP_DEFINE_GLOBAL_LONG:
     return print_constant_instruction("OP_DEFINE_GLOBAL_LONG", chunk, offset);
 
-   case OP_GET_GLOBAL:
+  case OP_GET_GLOBAL:
     return print_constant_instruction("OP_GET_GLOBAL", chunk, offset);
 
-   case OP_GET_GLOBAL_LONG:
+  case OP_GET_GLOBAL_LONG:
     return print_constant_instruction("OP_GET_GLOBAL_LONG", chunk, offset);
+
+  case OP_SET_GLOBAL:
+    return print_constant_instruction("OP_SET_GLOBAL", chunk, offset);
+
+  case OP_SET_GLOBAL_LONG:
+    return print_constant_instruction("OP_SET_GLOBAL_LONG", chunk, offset);
 
   case OP_CONSTANT:
     return print_constant_instruction("OP_CONSTANT", chunk, offset);
@@ -194,11 +202,10 @@ static int print_constant_instruction(const char *name, Chunk *chunk, int offset
 
   ant_value.print(chunk->constants.values[const_index]);
 
+
   return offset + operand_offset;
 }
-
-
 static bool is_long_constant(uint8_t opcode) {
   return opcode == OP_CONSTANT_LONG || opcode == OP_DEFINE_GLOBAL_LONG ||
-         opcode == OP_GET_GLOBAL_LONG;
+         opcode == OP_GET_GLOBAL_LONG || opcode == OP_SET_GLOBAL_LONG;
 }
