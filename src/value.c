@@ -21,9 +21,9 @@ static bool is_number(Value value);
 static bool is_nil(Value value);
 static bool is_object(Value value);
 
-ValueAPI ant_value = {.make_bool   = value_from_bool,
-                      .make_number = value_from_number,
-                      .make_object = value_from_object,
+ValueAPI ant_value = {.from_bool   = value_from_bool,
+                      .from_number = value_from_number,
+                      .from_object = value_from_object,
                       .make_nil    = value_from_nil,
                       .as_bool     = value_to_bool,
                       .as_number   = value_to_number,

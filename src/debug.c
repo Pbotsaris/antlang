@@ -135,8 +135,17 @@ static int32_t disassemble_instruction(Chunk *chunk, int offset) {
   case OP_LESS:
     return print_instruction("OP_LESS", offset);
 
-   case OP_PRINT:
+  case OP_PRINT:
     return print_instruction("OP_PRINT", offset);
+
+  case OP_POP:
+    return print_instruction("OP_POP", offset);
+
+  case OP_DEFINE_GLOBAL:
+    return print_constant_instruction("OP_DEFINE_GLOBAL", chunk, offset);
+
+  case OP_DEFINE_GLOBAL_LONG:
+    return print_constant_instruction("OP_DEFINE_GLOBAL_LONG", chunk, offset);
 
   case OP_CONSTANT:
     return print_constant_instruction("OP_CONSTANT", chunk, offset);
@@ -155,13 +164,12 @@ static int32_t print_instruction(const char *name, int offset) {
   return offset + 1;
 }
 
-static int print_constant_instruction(const char *name, Chunk *chunk,
-                                      int offset) {
+static int print_constant_instruction(const char *name, Chunk *chunk, int offset) {
   int32_t const_index = 0;
   int32_t operand_offset = 0;
 
   /* putting 24 bits together to get the constant index */
-  if (chunk->code[offset] == OP_CONSTANT_LONG) {
+  if (chunk->code[offset] == OP_CONSTANT_LONG || chunk->code[offset] == OP_DEFINE_GLOBAL_LONG) {
     uint8_t *operand_bytes = chunk->code + offset + 1;
     const_index = ant_utils.unpack_int32(operand_bytes, CONST_24BITS);
     operand_offset = 1 + CONST_24BITS; // 1 opcode + 3 operands

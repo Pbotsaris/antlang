@@ -109,12 +109,13 @@ static void free_vm(VM *vm) {
   ant_compiler.free(vm->compiler);
   ant_memory.free_objects();
   ant_string.free_all();
+  ant_table.free(&vm->globals);
   free(vm);
 }
 
 static InterpretResult run(VM *vm) {
-#define READ_BYTE() (*vm->ip++)
-#define READ_CONSTANT() (vm->chunk->constants.values[READ_BYTE()])
+#define READ_CHUNK_BYTE() (*vm->ip++)
+#define READ_CHUNK_CONSTANT() (vm->chunk->constants.values[READ_CHUNK_BYTE()])
 
 #define BINARY_OP(value_type, op)                                              \
   do {                                                                         \
@@ -139,7 +140,7 @@ static InterpretResult run(VM *vm) {
 
     uint8_t instruction;
 
-    switch ((instruction = READ_BYTE())) {
+    switch ((instruction = READ_CHUNK_BYTE())) {
 
     case OP_RETURN:
       return INTERPRET_OK;
@@ -152,7 +153,7 @@ static InterpretResult run(VM *vm) {
       }
 
       double num = ant_value.as_number(pop_stack(vm));
-      Value val = ant_value.make_number(num * -1);
+      Value val = ant_value.from_number(num * -1);
       push_stack(vm, val);
       break;
     }
@@ -167,32 +168,32 @@ static InterpretResult run(VM *vm) {
         Value b = pop_stack(vm);
         Value a = pop_stack(vm);
         ObjectString *str = ant_string.concat(a, b);
-        push_stack(vm, ant_value.make_object(ant_string.as_object(str)));
+        push_stack(vm, ant_value.from_object(ant_string.as_object(str)));
         break;
       }
 
-      BINARY_OP(ant_value.make_number, +);
+      BINARY_OP(ant_value.from_number, +);
       break;
     }
 
     case OP_SUBTRACT:
-      BINARY_OP(ant_value.make_number, -);
+      BINARY_OP(ant_value.from_number, -);
       break;
 
     case OP_MULTIPLY:
-      BINARY_OP(ant_value.make_number, *);
+      BINARY_OP(ant_value.from_number, *);
       break;
 
     case OP_DIVIDE:
-      BINARY_OP(ant_value.make_number, /);
+      BINARY_OP(ant_value.from_number, /);
       break;
 
     case OP_GREATER:
-      BINARY_OP(ant_value.make_bool, >);
+      BINARY_OP(ant_value.from_bool, >);
       break;
 
     case OP_LESS:
-      BINARY_OP(ant_value.make_bool, <);
+      BINARY_OP(ant_value.from_bool, <);
       break;
 
     case OP_EQUAL: {
@@ -203,7 +204,7 @@ static InterpretResult run(VM *vm) {
     }
 
     case OP_FALSE:
-      push_stack(vm, ant_value.make_bool(false));
+      push_stack(vm, ant_value.from_bool(false));
       break;
 
     case OP_NIL:
@@ -216,7 +217,7 @@ static InterpretResult run(VM *vm) {
       break;
     }
     case OP_TRUE:
-      push_stack(vm, ant_value.make_bool(true));
+      push_stack(vm, ant_value.from_bool(true));
       break;
 
     case OP_PRINT: {
@@ -226,22 +227,53 @@ static InterpretResult run(VM *vm) {
       break;
     }
 
+      /* OP_POP discards the top value from the stack */
+    case OP_POP: {
+      pop_stack(vm);
+      break;
+    }
+
+    case OP_DEFINE_GLOBAL: {
+      ObjectString *name = ant_string.from_value(READ_CHUNK_CONSTANT());
+      Value value        = pop_stack(vm);
+
+      printf("Defining global\n Name:  ");
+      ant_string.print(name);
+      printf("\n Value: ");
+      ant_value.print(value);
+      printf("\n");
+
+      ant_table.set(&vm->globals, name, value);
+      break;
+    }
+
+    case OP_DEFINE_GLOBAL_LONG: {
+     uint8_t *bytes =  vm->ip;
+     int32_t index  = ant_utils.unpack_int32(bytes, CONST_24BITS);
+     vm->ip        += CONST_24BITS;
+
+     ObjectString *name = ant_string.from_value(vm->chunk->constants.values[index]);
+     Value value        = pop_stack(vm);
+
+     ant_table.set(&vm->globals, name, value);
+    }
+
     case OP_CONSTANT:
-      push_stack(vm, READ_CONSTANT());
+      push_stack(vm, READ_CHUNK_CONSTANT());
       break;
 
     case OP_CONSTANT_LONG: {
-      uint8_t *bytes = vm->ip;
-      double constant = ant_utils.unpack_int32(bytes, CONST_24BITS);
-      vm->ip += CONST_24BITS;
+      uint8_t *bytes  = vm->ip;
+      double constant = (double)ant_utils.unpack_int32(bytes, CONST_24BITS);
+      vm->ip         += CONST_24BITS;
 
-      push_stack(vm, ant_value.make_number(constant));
+      push_stack(vm, ant_value.from_number(constant));
       break;
     }
     }
 
-#undef READ_BYTE
-#undef READ_CONSTANT
+#undef READ_CHUNK_BYTE
+#undef READ_CHUNK_CONSTANT
 #undef BINARY_OP
   }
 }

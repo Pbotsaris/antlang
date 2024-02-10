@@ -19,10 +19,10 @@ struct ObjectString {
 typedef struct {
    ObjectString*  (*make)             (const char *chars, int32_t length);
    void           (*free_all)         (void);
-   ObjectString*  (*concat)           (Value a, Value b);
-   char*          (*value_as_cstring) (Value value);
    ObjectString*  (*from_value)       (Value value);
-   void           (*print)            (Value value);
+   ObjectString*  (*concat)           (Value a, Value b);
+   char*          (*as_cstring)       (ObjectString* string);
+   void           (*print)            (ObjectString* string);
    Object*        (*as_object)        (ObjectString* string);
 }StringAPI;
 

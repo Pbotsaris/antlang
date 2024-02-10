@@ -18,7 +18,7 @@ Utils ant_utils = {
 static int32_t unpack_int32(uint8_t *bytes, int32_t num_bytes){
 
    if(num_bytes > 4){
-       printf("Error: unpack_int32() can only unpack 4 bytes\n");
+       printf("Error: ant_utils.unpack_int32 can only unpack up to 4 bytes\n");
        return -1;
    }
 

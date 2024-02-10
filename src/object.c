@@ -51,7 +51,7 @@ static Object *allocate_object(size_t size, ObjectType object_type) {
 static void print_object(Value value) {
   switch (get_type(value)) {
   case OBJ_STRING:
-    ant_string.print(value);
+    ant_string.print(ant_string.from_value(value));
     break;
 
   default:

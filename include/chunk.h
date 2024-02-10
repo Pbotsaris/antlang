@@ -6,23 +6,26 @@
 #include "config.h"
 
 typedef enum {
-  OP_RETURN,        /* no operand */
-  OP_NEGATE,        /* no operand */
-  OP_POSITIVE,      /* no operand */
-  OP_ADD,           /* no operand */
-  OP_SUBTRACT,      /* no operand */
-  OP_MULTIPLY,      /* no operand */
-  OP_DIVIDE,        /* no operand */
-  OP_NIL,           /* no operand */
-  OP_TRUE,          /* no operand */
-  OP_FALSE,         /* no operand */
-  OP_NOT,           /* no operand */
-  OP_EQUAL,         /* no operand */
-  OP_GREATER,       /* no operand */
-  OP_LESS,          /* no operand */
-  OP_PRINT,         /* no operand */
-  OP_CONSTANT,      /* 8-bit operand */
-  OP_CONSTANT_LONG, /* 24-bit operand */
+  OP_RETURN,             /* no operand */
+  OP_NEGATE,             /* no operand */
+  OP_POSITIVE,           /* no operand */
+  OP_ADD,                /* no operand */
+  OP_SUBTRACT,           /* no operand */
+  OP_MULTIPLY,           /* no operand */
+  OP_DIVIDE,             /* no operand */
+  OP_NIL,                /* no operand */
+  OP_TRUE,               /* no operand */
+  OP_FALSE,              /* no operand */
+  OP_NOT,                /* no operand */
+  OP_EQUAL,              /* no operand */
+  OP_GREATER,            /* no operand */
+  OP_LESS,               /* no operand */
+  OP_PRINT,              /* no operand */
+  OP_POP,                /* no operand */
+  OP_DEFINE_GLOBAL,      /* 8-bit operand */
+  OP_DEFINE_GLOBAL_LONG, /* 24-bit operand */
+  OP_CONSTANT,           /* 8-bit operand */
+  OP_CONSTANT_LONG,      /* 24-bit operand */
 } OpCode;
 
 /**
@@ -62,13 +65,17 @@ typedef struct AntChunk {
    */
   void (*free)(Chunk *chunk);
 
+  int32_t (*add_constant)(Chunk *chunk, Value value);
+
   /**
-   * @brief  writes a constant (OP_CONTANT or OP_CONSTANT_LONG) value to the chunk.
+   * @brief  writes a constant (OP_CONSTANT or OP_CONSTANT_LONG) value to the chunk
    * @param chunk the chunk to write to
    * @param value the constant value to write
    * @param line the line number of the constant
+   * @returns the index of the constant in the chunk's constant array. If < 0, an error occurred.
    */
   bool (*write_constant)(Chunk *chunk, Value value, int32_t line);
+  bool (*write_global)(Chunk *chunk, int32_t const_index, int32_t line);
 } AntChunkAPI;
 
 extern AntChunkAPI ant_chunk;

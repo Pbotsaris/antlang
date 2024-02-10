@@ -56,9 +56,11 @@ AntCompilerAPI ant_compiler = {
 /* Parsing */
 
 static void declaration(Compiler *compiler);
-static void statement(Compiler *compiler);
+static void variable_declaration(Compiler *compiler);
 
+static void statement(Compiler *compiler);
 static void print_statement(Compiler *compiler);
+static void expression_statement(Compiler *compiler);
 
 static void expression(Compiler *compiler);
 static void number(Compiler *compiler);
@@ -131,22 +133,24 @@ ParseRule rules[] = {
     [TOKEN_EOF] = {NULL, NULL, PREC_NONE},
 };
 
-
 static void parse_pressedence(Compiler *compile, Presedence presedence);
+
+/* variables */
+static void define_variable(Compiler *compiler, int32_t index);
+static int32_t parse_variable(Compiler *compiler, const char *message);
+static int32_t make_identifier_constant(Compiler *compiler, Token *token);
 
 /* Compiling steps */
 static void next_token(Compiler *compiler);
 static void consume(Compiler *compiler, TokenType type, const char *message);
 static void end_of_compilation(Compiler *compiler);
+static void synchronize(Compiler *compiler);
 
 /* Emitting Opcodes and values */
 static void emit_constant(Compiler *compiler, Value value);
-
-/* Emitting bytecode */
+static void emit_global(Compiler *compiler, int32_t index);
 static void emit_byte(Compiler *compiler, uint8_t byte);
 static void emit_two_bytes(Compiler *compiler, uint8_t byte1, uint8_t byte2);
-static void emit_constant_byte(Compiler *compiler, Value value);
-;
 
 /* error handling */
 static void error_at(Parser *parser, const char *message);
@@ -179,12 +183,12 @@ static Compiler *new_compiler(void) {
   compiler->scanner = ant_scanner.new();
   compiler->parser = parser;
 
-  compiler->parser->current = (Token){.length = -1, .line = -1, .type = TOKEN_EOF, .start = NULL};
+  compiler->parser->current =
+      (Token){.length = -1, .line = -1, .type = TOKEN_EOF, .start = NULL};
   compiler->parser->prev = compiler->parser->current;
 
   return compiler;
 }
-
 
 /**/
 
@@ -196,7 +200,6 @@ static void free_compiler(Compiler *compiler) {
   free(compiler->parser);
   free(compiler);
 }
-
 
 /**/
 
@@ -212,65 +215,113 @@ static bool compile(Compiler *compiler, const char *source, Chunk *chunk) {
 
   next_token(compiler);
 
-  while(!match(compiler, TOKEN_EOF)){
-     declaration(compiler);
+  while (!match(compiler, TOKEN_EOF)) {
+    declaration(compiler);
   }
 
   end_of_compilation(compiler);
   return !compiler->parser->was_error;
 }
 
+/**/
 
-static void declaration(Compiler * compiler){
-   Parser *parser = compiler->parser;
+static void declaration(Compiler *compiler) {
+  Parser *parser = compiler->parser;
 
   TRACE_PARSER_ENTER("Compiler *compiler = %p", compiler);
   TRACE_PARSER_TOKEN(parser->prev, parser->current);
 
-   statement(compiler);
+  if (match(compiler, TOKEN_LET)) {
+    variable_declaration(compiler);
 
-   TRACE_PARSER_EXIT();
+  } else {
+    statement(compiler);
+  }
+
+  if (parser->panic_mode) {
+    synchronize(compiler); // to next statement
+  }
+
+  TRACE_PARSER_EXIT();
 }
 
-static void statement(Compiler *compiler){
+/**/
 
-   Parser *parser = compiler->parser;
+static void variable_declaration(Compiler *compiler) {
+  Parser *parser = compiler->parser;
+
   TRACE_PARSER_ENTER("Compiler *compiler = %p", compiler);
   TRACE_PARSER_TOKEN(parser->prev, parser->current);
 
+  // note that we do not emit a constant instruction here
+  // that happens in define_variable below
+  uint8_t global_chunk_index =
+      parse_variable(compiler, "Expected variable name.");
 
-   if(match(compiler, TOKEN_PRINT)){
-      print_statement(compiler);
-   }
+  if (match(compiler, TOKEN_EQUAL)) {
+    expression(compiler);
+  } else {
+    // implicit initialization to nil
+    emit_byte(compiler, OP_NIL);
+  }
 
-   TRACE_PARSER_EXIT();
+  consume(compiler, TOKEN_SEMICOLON, "Expected ';' after variable declaration.");
+
+  // actually emits instruction to define the variable
+  define_variable(compiler, global_chunk_index);
+  TRACE_PARSER_EXIT();
 }
 
+/**/
 
-static void print_statement(Compiler *compiler){
+static void statement(Compiler *compiler) {
 
   Parser *parser = compiler->parser;
   TRACE_PARSER_ENTER("Compiler *compiler = %p", compiler);
   TRACE_PARSER_TOKEN(parser->prev, parser->current);
 
+  if (match(compiler, TOKEN_PRINT)) {
+    print_statement(compiler);
 
-   // parse expression first so when print is called there's a value on top of the stack
-   expression(compiler);
-
-   //TODO: Maybe remove semicolon from the language
-   consume(compiler, TOKEN_SEMICOLON, "Expected ';' after value");
-   emit_byte(compiler, OP_PRINT);
+  } else {
+    expression_statement(compiler);
+  }
 
   TRACE_PARSER_EXIT();
 }
 
+/**/
 
-static void expression(Compiler *compiler) {
+static void print_statement(Compiler *compiler) {
 
-   Parser *parser = compiler->parser;
-
+  Parser *parser = compiler->parser;
   TRACE_PARSER_ENTER("Compiler *compiler = %p", compiler);
   TRACE_PARSER_TOKEN(parser->prev, parser->current);
+
+  // parse expression first so when print is called there's a value on top of
+  // the stack
+  expression(compiler);
+
+  // TODO: Maybe remove semicolon from the language
+  consume(compiler, TOKEN_SEMICOLON, "Expected ';' after value");
+  emit_byte(compiler, OP_PRINT);
+
+  TRACE_PARSER_EXIT();
+}
+
+static void expression_statement(Compiler *compiler) {
+  TRACE_PARSER_ENTER("Compiler *compiler = %p", compiler);
+  TRACE_PARSER_TOKEN(compiler->parser->prev, compiler->parser->current);
+
+  expression(compiler);
+  consume(compiler, TOKEN_SEMICOLON, "Expected ';' after expression.");
+  emit_byte(compiler, OP_POP);
+  TRACE_PARSER_EXIT();
+}
+
+static void expression(Compiler *compiler) {
+  TRACE_PARSER_ENTER("Compiler *compiler = %p", compiler);
+  TRACE_PARSER_TOKEN(compiler->parser->prev, compiler->parser->current);
 
   /* start with the lowest presedence */
   parse_pressedence(compiler, PREC_ASSIGNMENT);
@@ -282,13 +333,12 @@ static void expression(Compiler *compiler) {
 
 static void parse_pressedence(Compiler *compiler, Presedence presedence) {
 
-   Parser *parser = compiler->parser;
+  Parser *parser = compiler->parser;
 
   TRACE_PARSER_ENTER("Compiler *compiler = %p, Presedence presedence = %s",
                      compiler, precedence_name(presedence));
 
   TRACE_PARSER_TOKEN(parser->prev, parser->current);
-
 
   next_token(compiler);
 
@@ -325,7 +375,7 @@ static void number(Compiler *compiler) {
   TRACE_PARSER_TOKEN(parser->prev, parser->current);
 
   double number = strtod(parser->prev.start, NULL);
-  emit_constant(compiler, ant_value.make_number(number));
+  emit_constant(compiler, ant_value.from_number(number));
 
   TRACE_PARSER_EXIT();
 }
@@ -347,7 +397,7 @@ static void grouping(Compiler *compiler) {
 static void unary(Compiler *compiler) {
 
   Parser *parser = compiler->parser;
- 
+
   TRACE_PARSER_ENTER("Compiler *compiler = %p", compiler);
   TRACE_PARSER_TOKEN(parser->prev, parser->current);
 
@@ -382,23 +432,45 @@ static void binary(Compiler *compiler) {
   TokenType operator_type = parser->prev.type;
   ParseRule *rule = get_rule(operator_type);
 
-  /* call parse presendence with one level higher because binary operators are left associative */
+  /* call parse presendence with one level higher because binary operators are
+   * left associative */
   parse_pressedence(compiler, (Presedence)(rule->presedence + 1));
 
   switch (operator_type) {
-   case TOKEN_PLUS:        emit_byte(compiler, OP_ADD); break;
-   case TOKEN_MINUS:       emit_byte(compiler, OP_SUBTRACT); break;
-   case TOKEN_STAR:        emit_byte(compiler, OP_MULTIPLY); break;
-   case TOKEN_SLASH:       emit_byte(compiler, OP_DIVIDE); break;
-   case TOKEN_EQUAL_EQUAL: emit_byte(compiler, OP_EQUAL); break;
-   case TOKEN_GREATER:     emit_byte(compiler, OP_GREATER); break;
-   case TOKEN_LESS:        emit_byte(compiler, OP_LESS); break;
-   case TOKEN_BANG_EQUAL:  emit_two_bytes(compiler, OP_LESS, OP_NOT); break;
-   /* because a <= b  is the same as !(a > b) */
-   case TOKEN_LESS_EQUAL:  emit_two_bytes(compiler, OP_GREATER, OP_NOT); break;
-   /* because a >= b  is the same as !(a < b) */
-   case TOKEN_GREATER_EQUAL: emit_two_bytes(compiler, OP_LESS, OP_NOT); break;
-   default: return; /* unreachable */
+  case TOKEN_PLUS:
+    emit_byte(compiler, OP_ADD);
+    break;
+  case TOKEN_MINUS:
+    emit_byte(compiler, OP_SUBTRACT);
+    break;
+  case TOKEN_STAR:
+    emit_byte(compiler, OP_MULTIPLY);
+    break;
+  case TOKEN_SLASH:
+    emit_byte(compiler, OP_DIVIDE);
+    break;
+  case TOKEN_EQUAL_EQUAL:
+    emit_byte(compiler, OP_EQUAL);
+    break;
+  case TOKEN_GREATER:
+    emit_byte(compiler, OP_GREATER);
+    break;
+  case TOKEN_LESS:
+    emit_byte(compiler, OP_LESS);
+    break;
+  case TOKEN_BANG_EQUAL:
+    emit_two_bytes(compiler, OP_LESS, OP_NOT);
+    break;
+  /* because a <= b  is the same as !(a > b) */
+  case TOKEN_LESS_EQUAL:
+    emit_two_bytes(compiler, OP_GREATER, OP_NOT);
+    break;
+  /* because a >= b  is the same as !(a < b) */
+  case TOKEN_GREATER_EQUAL:
+    emit_two_bytes(compiler, OP_LESS, OP_NOT);
+    break;
+  default:
+    return; /* unreachable */
   }
 
   TRACE_PARSER_EXIT();
@@ -432,18 +504,57 @@ static void literal(Compiler *compiler) {
 
 // TODO STOP ON 19.4
 
-void string(Compiler *compiler){
+void string(Compiler *compiler) {
 
-   Parser *parser = compiler->parser;
+  Parser *parser = compiler->parser;
 
-   const char *chars    = parser->prev.start + 1; // skip the first quote
-   int32_t length       = parser->prev.length - 2; // skip the first and last quote
-   ObjectString *string = ant_string.make(chars, length);
-   Value value          = ant_value.make_object(ant_string.as_object(string));
+  const char *chars = parser->prev.start + 1; // skip the first quote
+  int32_t length = parser->prev.length - 2;   // skip the first and last quote
+  ObjectString *string = ant_string.make(chars, length);
+  Value value = ant_value.from_object(ant_string.as_object(string));
 
-   emit_constant(compiler, value);
+  emit_constant(compiler, value);
 }
 
+/* Variables */
+
+static void define_variable(Compiler *compiler, int32_t index) {
+  Parser *parser = compiler->parser;
+
+  TRACE_PARSER_ENTER("Compiler *compiler = %p", compiler);
+  TRACE_PARSER_TOKEN(parser->prev, parser->current);
+
+  emit_global(compiler, index);
+
+  TRACE_PARSER_EXIT();
+}
+
+/**/
+
+static int32_t parse_variable(Compiler *compiler, const char *message) {
+  Parser *parser = compiler->parser;
+
+  TRACE_PARSER_ENTER("Compiler *compiler = %p", compiler);
+  TRACE_PARSER_TOKEN(parser->prev, parser->current);
+
+  consume(compiler, TOKEN_IDENTIFIER, message);
+  int32_t index = make_identifier_constant(compiler, &parser->prev);
+
+  TRACE_PARSER_EXIT();
+  return index;
+}
+
+/* Note that this function stores a constant but doesn't emit
+ * emit a constant instruction. So we are returning the index in the
+ * constant array so a later instruction can use it.
+ * */
+
+static int32_t make_identifier_constant(Compiler *compiler, Token *token) {
+  ObjectString *str    = ant_string.make(token->start, token->length);
+  Value name           = ant_value.from_object(ant_string.as_object(str));
+
+  return ant_chunk.add_constant(compiler->current_chunk, name);
+}
 
 /* Compilation steps */
 
@@ -453,7 +564,7 @@ static void next_token(Compiler *compiler) {
   parser->prev = parser->current;
 
   while (true) {
-     parser->current = ant_scanner.scan_token(compiler->scanner);
+    parser->current = ant_scanner.scan_token(compiler->scanner);
 
     if (parser->current.type != TOKEN_ERROR) {
       break;
@@ -480,7 +591,7 @@ static void consume(Compiler *compiler, TokenType type, const char *message) {
 /**/
 
 static void end_of_compilation(Compiler *compiler) {
-   emit_byte(compiler, OP_RETURN);
+  emit_byte(compiler, OP_RETURN);
 
 #ifdef DEBUG_PRINT_CODE
   ant_debug.disassemble_chunk(compiler->current_chunk, "code");
@@ -489,18 +600,55 @@ static void end_of_compilation(Compiler *compiler) {
 
 /**/
 
-static void emit_constant(Compiler *compiler, Value value) {
-  emit_constant_byte(compiler, value);
+static void synchronize(Compiler *compiler) {
+  Parser *parser = compiler->parser;
+
+  parser->panic_mode = false;
+
+  /* syncronize parser to the next statement */
+  while (parser->current.type != TOKEN_EOF) {
+
+    if (parser->prev.type == TOKEN_SEMICOLON) {
+      return;
+    }
+
+    switch (parser->current.type) {
+    case TOKEN_CLASS:
+    case TOKEN_FN:
+    case TOKEN_LET:
+    case TOKEN_FOR:
+    case TOKEN_IF:
+    case TOKEN_WHILE:
+    case TOKEN_PRINT:
+    case TOKEN_RETURN:
+      return;
+
+    default:;
+    }
+
+    next_token(compiler);
+  }
 }
 
 /**/
 
-static void emit_constant_byte(Compiler *compiler, Value value) {
+static void emit_constant(Compiler *compiler, Value value) {
   int32_t line = compiler->parser->prev.line;
-  bool result = ant_chunk.write_constant(compiler->current_chunk, value, line);
+  bool valid = ant_chunk.write_constant(compiler->current_chunk, value, line);
 
-  if (!result) {
+  if (!valid) {
     error(compiler->parser, "Too many constants in one chunk.");
+  }
+}
+
+/**/
+
+static void emit_global(Compiler *compiler, int32_t index) {
+  int32_t line = compiler->parser->prev.line;
+  bool valid  = ant_chunk.write_global(compiler->current_chunk, index, line);
+
+  if (!valid) {
+    error(compiler->parser, "Too many global variables in one chunk.");
   }
 }
 
@@ -568,20 +716,20 @@ static void reset_parser(Parser *parser) {
 
 /**/
 
-static ParseRule *get_rule(TokenType type){ return &rules[type]; }
+static ParseRule *get_rule(TokenType type) { return &rules[type]; }
 
 /* */
 
-static bool match(Compiler *compiler, TokenType type){
-   if(!check(compiler, type)) return false;
+static bool match(Compiler *compiler, TokenType type) {
+  if (!check(compiler, type))
+    return false;
 
-   next_token(compiler);
-   return true;
+  next_token(compiler);
+  return true;
 }
 
-
-static bool check(Compiler *compiler, TokenType type){
-   return compiler->parser->current.type == type;
+static bool check(Compiler *compiler, TokenType type) {
+  return compiler->parser->current.type == type;
 }
 
 /**/

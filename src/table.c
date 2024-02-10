@@ -88,7 +88,7 @@ static bool table_delete(Table *table, ObjectString *key) {
    */
 
   entry->key = NULL;
-  entry->value = ant_value.make_bool(true);
+  entry->value = ant_value.from_bool(true);
 
   return true;
 }

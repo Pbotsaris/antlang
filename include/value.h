@@ -36,9 +36,9 @@ typedef struct {
  * types and for inspecting the type and content of existing Values.
  */
 typedef struct AntValue {
-  Value  (*make_bool)     (bool value);  
-  Value  (*make_number)   ( double value);
-  Value  (*make_object)   (Object *object);
+  Value  (*from_bool)     (bool value);  
+  Value  (*from_number)   ( double value);
+  Value  (*from_object)   (Object *object);
   Value  (*make_nil)      (void);       
 
   double (*as_number)     (Value value); 

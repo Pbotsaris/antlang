@@ -6,15 +6,15 @@
 static ObjectString *to_obj_string(Value value);
 static ObjectString *make_string(const char *chars, int length);
 static ObjectString *concat_string(Value a, Value b);
-static char *value_as_cstring(Value value);
-static void print_string(Value value);
+static char *as_cstring(ObjectString *string);
+static void print_string(ObjectString *string);
 static Object *as_object(ObjectString *string);
 static void free_strings(void);
 
 StringAPI ant_string = {
     .make             = make_string,
     .free_all         = free_strings,
-    .value_as_cstring = value_as_cstring,
+    .as_cstring       = as_cstring,
     .concat           = concat_string,
     .from_value       = to_obj_string,
     .print            = print_string,
@@ -39,8 +39,8 @@ static ObjectString *to_obj_string(Value value) {
 
 /* */
 
-static char *value_as_cstring(Value value) {
-  return to_obj_string(value)->chars;
+static char *as_cstring(ObjectString *value) {
+  return value->chars;
 }
 
 /* */
@@ -72,6 +72,7 @@ static ObjectString *concat_string(Value a, Value b) {
 
 static ObjectString *make_string(const char *chars, int32_t length) {
 
+   /* checks wether the const char* already exists in string table */
    uint32_t hash     = hash_string(chars, length);
    ObjectString *str = ant_table.find(&strings, chars, length, hash);
 
@@ -87,8 +88,8 @@ static ObjectString *make_string(const char *chars, int32_t length) {
   return allocate_string(heap_chars, length, hash);
 }
 
-void print_string(Value value) {
-  printf("{ '%s' }", ant_string.value_as_cstring(value));
+void print_string(ObjectString *string) {
+  printf("{ '%s' }", as_cstring(string));
 }
 
 /* */
