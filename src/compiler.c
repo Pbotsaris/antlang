@@ -1,5 +1,5 @@
 #include <stdio.h>
-#include <stdlib.h>
+#include <stdlib.h>comp
 
 #include "compiler.h"
 #include "object.h"
@@ -186,9 +186,9 @@ static Compiler *new_compiler(void) {
   compiler->scanner = ant_scanner.new();
   compiler->parser = parser;
 
-  compiler->parser->current =
-      (Token){.length = -1, .line = -1, .type = TOKEN_EOF, .start = NULL};
+  compiler->parser->current = (Token){.length = -1, .line = -1, .type = TOKEN_EOF, .start = NULL};
   compiler->parser->prev = compiler->parser->current;
+  ant_table.init(&compiler->globals_mapping);
 
   return compiler;
 }
@@ -196,10 +196,10 @@ static Compiler *new_compiler(void) {
 /**/
 
 static void free_compiler(Compiler *compiler) {
-  if (compiler == NULL)
-    return;
+  if (compiler == NULL) return;
 
   ant_scanner.free(compiler->scanner);
+  ant_table.free(&compiler->globals_mapping);
   free(compiler->parser);
   free(compiler);
 }
@@ -258,8 +258,7 @@ static void variable_declaration(Compiler *compiler) {
 
   // note that we do not emit a constant instruction here
   // that happens in define_variable below
-  uint8_t global_chunk_index =
-      parse_variable(compiler, "Expected variable name.");
+  uint8_t global_chunk_index = parse_variable(compiler, "Expected variable name.");
 
   if (match(compiler, TOKEN_EQUAL)) {
     expression(compiler);

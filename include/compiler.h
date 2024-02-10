@@ -3,6 +3,7 @@
 #include "chunk.h"
 #include "common.h"
 #include "scanner.h"
+#include "table.h"
 
 typedef struct {
   Token current;
@@ -31,6 +32,7 @@ typedef struct {
   Scanner *scanner;
   Parser *parser;
   Chunk *current_chunk;
+  Table globals_mapping;
 } Compiler;
 
 typedef struct AntCompiler {
