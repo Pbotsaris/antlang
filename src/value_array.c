@@ -4,16 +4,16 @@
 #include <stdio.h>
 
 static void init_value_array(ValueArray *array);
-static void init_value_array_with_nils(ValueArray *array);
+static void init_value_array_with_undefined(ValueArray *array);
 static void write_value(ValueArray *array, Value value);
 static bool write_value_at(ValueArray *array, Value value, int32_t index);
 static void free_value_array(ValueArray *array);
 static Value find_at(ValueArray *array, int32_t index);
 
-static void write_nils(ValueArray *array, int32_t from, int32_t to);
+static void write_undefined(ValueArray *array, int32_t from, int32_t to);
 ValuesArrayAPI ant_value_array = {
     .init = init_value_array,
-    .init_nils = init_value_array_with_nils,
+    .init_undefined = init_value_array_with_undefined,
     .write = write_value,
     .write_at = write_value_at,
     .free = free_value_array,
@@ -24,25 +24,24 @@ static void init_value_array(ValueArray *array) {
   array->values = NULL;
   array->capacity = 0;
   array->count = 0;
-  array->has_nils = false;
+  array->has_undefined = false;
 }
 
-static void init_value_array_with_nils(ValueArray *array) {
+static void init_value_array_with_undefined(ValueArray *array) {
   array->values = NULL;
   array->capacity = 0;
   array->count = 0;
-  array->has_nils = true;
+  array->has_undefined = true;
 }
 
 static void write_value(ValueArray *array, Value value) {
   if (array->capacity < array->count + 1) {
     int32_t old_capacity = array->capacity;
     array->capacity = GROW_CAPACITY(old_capacity);
-    array->values =
-        GROW_ARRAY(Value, array->values, old_capacity, array->capacity);
+    array->values = GROW_ARRAY(Value, array->values, old_capacity, array->capacity);
 
-    if (array->has_nils) {
-      write_nils(array, old_capacity, array->capacity);
+    if (array->has_undefined) {
+      write_undefined(array, old_capacity, array->capacity);
     }
   }
 
@@ -63,8 +62,8 @@ static bool write_value_at(ValueArray *array, Value value, int32_t index) {
     array->capacity = GROW_CAPACITY(index + 1);
     array->values = GROW_ARRAY(Value, array->values, old_capacity, array->capacity);
 
-    if (array->has_nils) {
-      write_nils(array, old_capacity, array->capacity);
+    if (array->has_undefined) {
+      write_undefined(array, old_capacity, array->capacity);
     }
   }
 
@@ -86,10 +85,6 @@ static Value find_at(ValueArray *array, int32_t index) {
     return ant_value.make_nil();
   }
 
-  if(!array->has_nils){
-     fprintf(stderr, "ValueArray: using .at method with No nils in the array.\n");
-  }
-
   return array->values[index];
 }
 
@@ -101,8 +96,8 @@ static void free_value_array(ValueArray *array) {
   init_value_array(array);
 }
 
-static void write_nils(ValueArray *array, int32_t from, int32_t to) {
+static void write_undefined(ValueArray *array, int32_t from, int32_t to) {
   for (int32_t i = from; i < to; i++) {
-    array->values[i] = ant_value.make_nil();
+    array->values[i] = ant_value.make_undefined();
   }
 }

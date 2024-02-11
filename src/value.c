@@ -6,12 +6,13 @@ static void print_value(Value value);
 
 static Value value_from_bool(bool value);
 static Value value_from_number(double value);
-static Value value_from_object(Object* value);
+static Value value_from_object(Object *value);
 static Value value_from_nil();
+static Value value_from_undefined(void);
 
 static bool value_to_bool(Value value);
 static double value_to_number(Value value);
-static Object* value_to_object(Value value);
+static Object *value_to_object(Value value);
 
 static Value equals(Value a, Value b);
 static Value is_falsey(Value value);
@@ -19,22 +20,25 @@ static Value is_falsey(Value value);
 static bool is_bool(Value value);
 static bool is_number(Value value);
 static bool is_nil(Value value);
+static bool is_undefined(Value value);
 static bool is_object(Value value);
 
-ValueAPI ant_value = {.from_bool   = value_from_bool,
+ValueAPI ant_value = {.from_bool = value_from_bool,
                       .from_number = value_from_number,
                       .from_object = value_from_object,
-                      .make_nil    = value_from_nil,
-                      .as_bool     = value_to_bool,
-                      .as_number   = value_to_number,
-                      .as_object   = value_to_object,
-                      .is_bool     = is_bool,
-                      .is_number   = is_number,
-                      .is_nil      = is_nil,
-                      .is_object   = is_object,
-                      .print       = print_value,
-                      .equals      = equals,
-                      .is_falsey   = is_falsey};
+                      .make_nil = value_from_nil,
+                      .make_undefined = value_from_undefined,
+                      .as_bool = value_to_bool,
+                      .as_number = value_to_number,
+                      .as_object = value_to_object,
+                      .is_bool = is_bool,
+                      .is_number = is_number,
+                      .is_undefined = is_undefined,
+                      .is_nil = is_nil,
+                      .is_object = is_object,
+                      .print = print_value,
+                      .equals = equals,
+                      .is_falsey = is_falsey};
 
 /* */
 static Value value_from_bool(bool value) {
@@ -55,7 +59,13 @@ static Value value_from_nil() {
 
 /* */
 
-static Value value_from_object(Object* value) {
+static Value value_from_undefined(void) {
+  return (Value){.type = VAL_UNDEFINED, .as.number = 0};
+}
+
+/* */
+
+static Value value_from_object(Object *value) {
   return (Value){.type = VAL_OBJECT, .as.object = value};
 }
 
@@ -82,7 +92,7 @@ static double value_to_number(Value value) {
 
 /* */
 
-static Object* value_to_object(Value value) {
+static Object *value_to_object(Value value) {
   if (value.type != VAL_OBJECT) {
     fprintf(stderr, "Value is not an object. Returning default: NULL\n");
     return NULL;
@@ -95,6 +105,7 @@ static Object* value_to_object(Value value) {
 
 static bool is_bool(Value value) { return value.type == VAL_BOOL; }
 static bool is_number(Value value) { return value.type == VAL_NUMBER; }
+static bool is_undefined(Value value) { return value.type == VAL_UNDEFINED; }
 static bool is_nil(Value value) { return value.type == VAL_NIL; }
 static bool is_object(Value value) { return value.type == VAL_OBJECT; }
 
@@ -124,8 +135,8 @@ static Value equals(Value a, Value b) {
   case VAL_NUMBER:
     return value_from_bool(a.as.number == b.as.number);
 
-   case VAL_OBJECT:
-    /* we can do this because our strings are all internalized 
+  case VAL_OBJECT:
+    /* we can do this because our strings are all internalized
      * So we can compare memory addreses
      */
     return value_from_bool(a.as.object == b.as.object);
@@ -148,10 +159,12 @@ static void print_value(Value value) {
   case VAL_NUMBER:
     printf("%g", value.as.number);
     break;
-   case VAL_OBJECT:
+  case VAL_UNDEFINED:
+    printf("Undefined");
+    break;
+  case VAL_OBJECT:
     printf("Object");
     ant_object.print(value);
     break;
-
   }
 }

@@ -9,6 +9,7 @@
 typedef enum {
   VAL_BOOL,
   VAL_NIL,
+  VAL_UNDEFINED,
   VAL_NUMBER,
   VAL_OBJECT,
 } ValueType;
@@ -40,6 +41,7 @@ typedef struct AntValue {
   Value  (*from_number)   ( double value);
   Value  (*from_object)   (Object *object);
   Value  (*make_nil)      (void);       
+  Value  (*make_undefined)(void);
 
   double (*as_number)     (Value value); 
   bool   (*as_bool)       (Value value); 
@@ -47,6 +49,7 @@ typedef struct AntValue {
 
   bool   (*is_bool)      (Value value);  
   bool   (*is_nil)       (Value value);   
+  bool   (*is_undefined) (Value value);
   bool   (*is_number)    (Value value);    
   bool   (*is_object)    (Value value);     
 

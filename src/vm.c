@@ -59,7 +59,7 @@ static VM *new_vm() {
   vm->ip = NULL;
 
   ant_compiler.init(&vm->compiler);
-  ant_value_array.init_nils(&vm->globals);
+  ant_value_array.init_undefined(&vm->globals);
 
   return vm;
 }
@@ -282,7 +282,7 @@ static InterpretResult run(VM *vm) {
         int32_t global_index = (int32_t)READ_CHUNK_BYTE();
         Value value = ant_value_array.at(&vm->globals, global_index);
 
-        if(ant_value.is_nil(value)){
+        if(ant_value.is_undefined(value)){
            runtime_error(vm, "Undefined variable");
            return INTERPRET_RUNTIME_ERROR;
         }
@@ -295,7 +295,7 @@ static InterpretResult run(VM *vm) {
        int32_t global_index = read_24bit_operand(vm);
        Value value          = ant_value_array.at(&vm->globals, global_index);
 
-        if(ant_value.is_nil(value)){
+        if(ant_value.is_undefined(value)){
            runtime_error(vm, "Undefined variable");
            return INTERPRET_RUNTIME_ERROR;
         }
@@ -308,7 +308,7 @@ static InterpretResult run(VM *vm) {
        int32_t global_index = (int32_t)READ_CHUNK_BYTE();
        Value value          = ant_value_array.at(&vm->globals, global_index);
 
-       if(ant_value.is_nil(value)){
+       if(ant_value.is_undefined(value)){
            runtime_error(vm, "Undefined variable");
            return INTERPRET_RUNTIME_ERROR;
         }
@@ -324,7 +324,7 @@ static InterpretResult run(VM *vm) {
        int32_t global_index = read_24bit_operand(vm);
        Value value          = ant_value_array.at(&vm->globals, global_index);
 
-        if(ant_value.is_nil(value)){
+        if(ant_value.is_undefined(value)){
            runtime_error(vm, "Undefined variable");
            return INTERPRET_RUNTIME_ERROR;
         }

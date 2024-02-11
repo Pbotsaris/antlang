@@ -51,8 +51,8 @@ static bool table_set(Table *table, ObjectString *key, Value value) {
   /* check if value is nil to not increment count when re-using a tombstone
    * value */
   bool is_new = entry->key == NULL && ant_value.is_nil(entry->value);
-  if (is_new)
-    table->count++;
+
+  if (is_new) table->count++;
 
   entry->key = key;
   entry->value = value;

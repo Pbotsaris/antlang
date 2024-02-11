@@ -11,7 +11,7 @@ typedef struct {
   int32_t capacity;  /**< Total allocated capacity for storing constant values. */
   int32_t count;    /**< Number of constant values currently stored in the array. */
   Value *values;    /**< Pointer to the array of constant values. */
-  bool has_nils;
+  bool has_undefined;
 } ValueArray;
 
 /**
@@ -27,7 +27,7 @@ typedef struct AntValuesArray {
    * @brief Initializes a ValueArray structure with nils. When array grows to new capacity, it will be filled with nils.
    * @param array Pointer to the ValueArray structure to initialize.
    */
-  void (*init_nils)(ValueArray *array);
+  void (*init_undefined)(ValueArray *array);
 
   /**
    * @brief Writes a Value to the array.
