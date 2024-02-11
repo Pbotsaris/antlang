@@ -145,7 +145,7 @@ static InterpretResult run(VM *vm) {
 
       /* address to index, get the relative offset */
       int32_t offset = (int32_t)(vm->ip - vm->chunk->code);
-      ant_debug.disassemble_instruction(vm->chunk, offset);
+      ant_debug.disassemble_instruction(&vm->compiler, offset);
 #endif
 
       uint8_t instruction;

@@ -582,7 +582,7 @@ static void end_of_compilation(Compiler *compiler) {
   emit_byte(compiler, OP_RETURN);
 
 #ifdef DEBUG_PRINT_CODE
-  ant_debug.disassemble_chunk(compiler->current_chunk, "code");
+  ant_debug.disassemble_chunk(compiler, "code");
 #endif
 }
 
