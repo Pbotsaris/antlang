@@ -51,7 +51,7 @@ static Compiler *new_compiler(void);
 static bool compile(Compiler *compiler, const char *source, Chunk *chunk);
 static void free_compiler(Compiler *compiler);
 
-AntCompilerAPI ant_compiler = {
+const AntCompilerAPI ant_compiler = {
     .new = new_compiler,
     .compile = compile,
     .free = free_compiler,
@@ -162,7 +162,6 @@ static void error(Parser *parser, const char *message);
 static void error_at_current(Parser *parser, const char *message);
 
 /* utils */
-static void reset_parser(Parser *parser);
 static const char *precedence_name(Presedence presedence);
 static bool match(Compiler *compiler, TokenType type);
 static bool check(Compiler *compiler, TokenType type);
@@ -177,19 +176,8 @@ static Compiler *new_compiler(void) {
     exit(1);
   }
 
-  Parser *parser = (Parser *)malloc(sizeof(Parser));
-
-  if (parser == NULL) {
-    fprintf(stderr, "Could not allocate memory for parser\n");
-    exit(1);
-  }
-
   compiler->scanner = ant_scanner.new();
-  compiler->parser = parser;
-
-  compiler->parser->current = (Token){.length = -1, .line = -1, .type = TOKEN_EOF, .start = NULL};
-  compiler->parser->prev = compiler->parser->current;
-
+  ant_parser.init(&compiler->parser);
   ant_mapping.init(&compiler->globals);
   return compiler;
 }
@@ -198,10 +186,8 @@ static Compiler *new_compiler(void) {
 
 static void free_compiler(Compiler *compiler) {
   if (compiler == NULL) return;
-
   ant_scanner.free(compiler->scanner);
   ant_mapping.free(&compiler->globals);
-  free(compiler->parser);
   free(compiler);
 }
 
@@ -211,7 +197,7 @@ static bool compile(Compiler *compiler, const char *source, Chunk *chunk) {
   ant_scanner.init(compiler->scanner, source);
 
   compiler->current_chunk = chunk;
-  reset_parser(compiler->parser);
+  ant_parser.reset(&compiler->parser);
 
 #ifdef DEBUG_TRACE_PARSER
   printf("\n== Parser Trace== \n");
@@ -224,16 +210,14 @@ static bool compile(Compiler *compiler, const char *source, Chunk *chunk) {
   }
 
   end_of_compilation(compiler);
-  return !compiler->parser->was_error;
+  return !compiler->parser.was_error;
 }
 
 /**/
 
 static void declaration(Compiler *compiler) {
-  Parser *parser = compiler->parser;
-
   TRACE_PARSER_ENTER("Compiler *compiler = %p", compiler);
-  TRACE_PARSER_TOKEN(parser->prev, parser->current);
+  TRACE_PARSER_TOKEN(compiler->parser.prev, compiler->parser.current);
 
   if (match(compiler, TOKEN_LET)) {
     variable_declaration(compiler);
@@ -242,7 +226,7 @@ static void declaration(Compiler *compiler) {
     statement(compiler);
   }
 
-  if (parser->panic_mode) {
+  if (compiler->parser.panic_mode) {
     synchronize(compiler); // to next statement
   }
 
@@ -252,10 +236,9 @@ static void declaration(Compiler *compiler) {
 /**/
 
 static void variable_declaration(Compiler *compiler) {
-  Parser *parser = compiler->parser;
 
   TRACE_PARSER_ENTER("Compiler *compiler = %p", compiler);
-  TRACE_PARSER_TOKEN(parser->prev, parser->current);
+  TRACE_PARSER_TOKEN(compiler->parser.prev, compiler->parser.current);
 
   // note that we do not emit a constant instruction here
   // that happens in define_variable below
@@ -278,10 +261,8 @@ static void variable_declaration(Compiler *compiler) {
 /**/
 
 static void statement(Compiler *compiler) {
-
-  Parser *parser = compiler->parser;
   TRACE_PARSER_ENTER("Compiler *compiler = %p", compiler);
-  TRACE_PARSER_TOKEN(parser->prev, parser->current);
+  TRACE_PARSER_TOKEN(compiler->parser.prev, compiler->parser.current);
 
   if (match(compiler, TOKEN_PRINT)) {
     print_statement(compiler);
@@ -296,11 +277,8 @@ static void statement(Compiler *compiler) {
 /**/
 
 static void print_statement(Compiler *compiler) {
-
-  Parser *parser = compiler->parser;
   TRACE_PARSER_ENTER("Compiler *compiler = %p", compiler);
-  TRACE_PARSER_TOKEN(parser->prev, parser->current);
-
+  TRACE_PARSER_TOKEN(compiler->parser.prev, compiler->parser.current);
   // parse expression first so when print is called there's a value on top of
   // the stack
   expression(compiler);
@@ -314,7 +292,7 @@ static void print_statement(Compiler *compiler) {
 
 static void expression_statement(Compiler *compiler) {
   TRACE_PARSER_ENTER("Compiler *compiler = %p", compiler);
-  TRACE_PARSER_TOKEN(compiler->parser->prev, compiler->parser->current);
+  TRACE_PARSER_TOKEN(compiler->parser.prev, compiler->parser.current);
 
   expression(compiler);
   consume(compiler, TOKEN_SEMICOLON, "Expected ';' after expression.");
@@ -324,7 +302,7 @@ static void expression_statement(Compiler *compiler) {
 
 static void expression(Compiler *compiler) {
   TRACE_PARSER_ENTER("Compiler *compiler = %p", compiler);
-  TRACE_PARSER_TOKEN(compiler->parser->prev, compiler->parser->current);
+  TRACE_PARSER_TOKEN(compiler->parser.prev, compiler->parser.current);
 
   /* start with the lowest presedence */
   parse_pressedence(compiler, PREC_ASSIGNMENT);
@@ -335,20 +313,17 @@ static void expression(Compiler *compiler) {
 /**/
 
 static void parse_pressedence(Compiler *compiler, Presedence presedence) {
-
-  Parser *parser = compiler->parser;
-
   TRACE_PARSER_ENTER("Compiler *compiler = %p, Presedence presedence = %s", compiler, precedence_name(presedence));
-  TRACE_PARSER_TOKEN(parser->prev, parser->current);
+  TRACE_PARSER_TOKEN(compiler->parser.prev, compiler->parser.current);
 
   next_token(compiler);
 
-  TokenType prev_type    = parser->prev.type;
+  TokenType prev_type    = compiler->parser.prev.type;
   ParserFunc prefix_rule = get_rule(prev_type)->prefix;
 
   // the first token should always belong to a prefix expression
   if (prefix_rule == NULL) {
-    error(compiler->parser, "Expected expression.");
+    error(&compiler->parser, "Expected expression.");
     return;
   }
 
@@ -357,10 +332,10 @@ static void parse_pressedence(Compiler *compiler, Presedence presedence) {
 
   // we only parse infix expressions if the current token has a higher
   // presedence than what was passed to parse_pressedence
-  while (presedence <= get_rule(parser->current.type)->presedence) {
+  while (presedence <= get_rule(compiler->parser.current.type)->presedence) {
     next_token(compiler);
 
-    TokenType prev_type = parser->prev.type;
+    TokenType prev_type = compiler->parser.prev.type;
     ParserFunc infix_rule = get_rule(prev_type)->infix;
 
     infix_rule(compiler, can_assign);;
@@ -369,20 +344,17 @@ static void parse_pressedence(Compiler *compiler, Presedence presedence) {
   // variable did not consume = because it's not an assignment
   // report an error
   if(can_assign && match(compiler, TOKEN_EQUAL)){
-     error(compiler->parser, "Invalid assignment target.");
+     error(&compiler->parser, "Invalid assignment target.");
   }
 
   TRACE_PARSER_EXIT();
 }
 
-static void number(Compiler *compiler, bool can_assign) {
-
-  Parser *parser = compiler->parser;
-
+static void number(Compiler *compiler, bool _) {
   TRACE_PARSER_ENTER("Compiler *compiler = %p", compiler);
-  TRACE_PARSER_TOKEN(parser->prev, parser->current);
+  TRACE_PARSER_TOKEN(compiler->parser.prev, compiler->parser.current);
 
-  double number = strtod(parser->prev.start, NULL);
+  double number = strtod(compiler->parser.prev.start, NULL);
   emit_constant(compiler, ant_value.from_number(number));
 
   TRACE_PARSER_EXIT();
@@ -390,9 +362,9 @@ static void number(Compiler *compiler, bool can_assign) {
 
 /**/
 
-static void grouping(Compiler *compiler, bool can_assign) {
+static void grouping(Compiler *compiler, bool _) {
   TRACE_PARSER_ENTER("Compiler *compiler = %p", compiler);
-  TRACE_PARSER_TOKEN(compiler->parser->prev, compiler->parser->current);
+  TRACE_PARSER_TOKEN(compiler->parser.prev, compiler->parser.current);
 
   expression(compiler);
   consume(compiler, TOKEN_RIGHT_PAREN, "Expect ')' after expression.");
@@ -402,14 +374,11 @@ static void grouping(Compiler *compiler, bool can_assign) {
 
 /**/
 
-static void unary(Compiler *compiler, bool can_assign) {
-
-  Parser *parser = compiler->parser;
-
+static void unary(Compiler *compiler, bool _) {
   TRACE_PARSER_ENTER("Compiler *compiler = %p", compiler);
-  TRACE_PARSER_TOKEN(parser->prev, parser->current);
+  TRACE_PARSER_TOKEN(compiler->parser.prev, compiler->parser.current);
 
-  TokenType operator_type = parser->prev.type;
+  TokenType operator_type = compiler->parser.prev.type;
 
   parse_pressedence(compiler, PREC_UNARY);
   switch (operator_type) {
@@ -430,14 +399,11 @@ static void unary(Compiler *compiler, bool can_assign) {
 }
 /**/
 
-static void binary(Compiler *compiler, bool can_assign) {
-
-  Parser *parser = compiler->parser;
-
+static void binary(Compiler *compiler, bool _) {
   TRACE_PARSER_ENTER("Compiler *compiler = %p", compiler);
-  TRACE_PARSER_TOKEN(parser->prev, parser->current);
+  TRACE_PARSER_TOKEN(compiler->parser.prev, compiler->parser.current);
 
-  TokenType operator_type = parser->prev.type;
+  TokenType operator_type = compiler->parser.prev.type;
   ParseRule *rule = get_rule(operator_type);
 
   /* call parse presendence with one level higher because binary operators are left associative */
@@ -486,19 +452,18 @@ static void binary(Compiler *compiler, bool can_assign) {
 /* */
 static void variable(Compiler *compiler, bool can_assign){
    TRACE_PARSER_ENTER("Compiler *compiler = %p", compiler);
-   TRACE_PARSER_TOKEN(compiler->parser->prev, compiler->parser->current);
-   named_variable(compiler, compiler->parser->prev, can_assign);
+   TRACE_PARSER_TOKEN(compiler->parser.prev, compiler->parser.current);
+   named_variable(compiler, compiler->parser.prev, can_assign);
    TRACE_PARSER_EXIT();
 }
 
 /* */
 
-static void literal(Compiler *compiler, bool can_assign) {
-  Parser *parser = compiler->parser;
+static void literal(Compiler *compiler, bool _) {
   TRACE_PARSER_ENTER("Compiler *compiler = %p", compiler);
-  TRACE_PARSER_TOKEN(parser->prev, parser->current);
+  TRACE_PARSER_TOKEN(compiler->parser.prev, compiler->parser.current);
 
-  switch (parser->prev.type) {
+  switch (compiler->parser.prev.type) {
   case TOKEN_FALSE:
     emit_byte(compiler, OP_FALSE);
     break;
@@ -517,12 +482,9 @@ static void literal(Compiler *compiler, bool can_assign) {
 
 /**/
 
-void string(Compiler *compiler, bool can_assign) {
-
-  Parser *parser = compiler->parser;
-
-  const char *chars = parser->prev.start + 1; // skip the first quote
-  int32_t length = parser->prev.length - 2;   // skip the first and last quote
+void string(Compiler *compiler, bool _) {
+  const char *chars = compiler->parser.prev.start + 1; // skip the first quote
+  int32_t length = compiler->parser.prev.length - 2;   // skip the first and last quote
   ObjectString *string = ant_string.make(chars, length);
   Value value = ant_value.from_object(ant_string.as_object(string));
 
@@ -532,10 +494,8 @@ void string(Compiler *compiler, bool can_assign) {
 /* Variables */
 
 static void define_variable(Compiler *compiler, int32_t global_index) {
-  Parser *parser = compiler->parser;
-
   TRACE_PARSER_ENTER("Compiler *compiler = %p", compiler);
-  TRACE_PARSER_TOKEN(parser->prev, parser->current);
+  TRACE_PARSER_TOKEN(compiler->parser.prev, compiler->parser.current);
 
   emit_global_variable(compiler, global_index, ant_chunk.write_define_global);
   TRACE_PARSER_EXIT();
@@ -545,7 +505,7 @@ static void define_variable(Compiler *compiler, int32_t global_index) {
 
 static void named_variable(Compiler *compiler, Token name, bool can_assign) {
   TRACE_PARSER_ENTER("Compiler *compiler = %p", compiler);
-  TRACE_PARSER_TOKEN(compiler->parser->prev, compiler->parser->current);
+  TRACE_PARSER_TOKEN(compiler->parser.prev, compiler->parser.current);
 
    int32_t const_index = make_identifier_constant(compiler, &name);
 
@@ -566,15 +526,13 @@ static void named_variable(Compiler *compiler, Token name, bool can_assign) {
 /* */
 
 static int32_t parse_variable(Compiler *compiler, const char *message) {
-  Parser *parser = compiler->parser;
 
   TRACE_PARSER_ENTER("Compiler *compiler = %p", compiler);
-  TRACE_PARSER_TOKEN(parser->prev, parser->current);
+  TRACE_PARSER_TOKEN(compiler->parser.prev, compiler->parser.current);
 
   consume(compiler, TOKEN_IDENTIFIER, message);
 
-
-  int32_t globals_index = make_identifier_constant(compiler, &parser->prev);
+  int32_t globals_index = make_identifier_constant(compiler, &compiler->parser.prev);
   TRACE_PARSER_EXIT();
   return globals_index;
 }
@@ -599,17 +557,16 @@ static int32_t make_identifier_constant(Compiler *compiler, Token *token) {
 
 static void next_token(Compiler *compiler) {
 
-  Parser *parser = compiler->parser;
-  parser->prev = parser->current;
+  compiler->parser.prev = compiler->parser.current;
 
   while (true) {
-    parser->current = ant_scanner.scan_token(compiler->scanner);
+    compiler->parser.current = ant_scanner.scan_token(compiler->scanner);
 
-    if (parser->current.type != TOKEN_ERROR) {
+    if (compiler->parser.current.type != TOKEN_ERROR) {
       break;
     }
 
-    error_at_current(parser, parser->current.start);
+    error_at_current(&compiler->parser, compiler->parser.current.start);
   }
 }
 
@@ -617,14 +574,12 @@ static void next_token(Compiler *compiler) {
 
 static void consume(Compiler *compiler, TokenType type, const char *message) {
 
-  Parser *parser = compiler->parser;
-
-  if (parser->current.type == type) {
+  if (compiler->parser.current.type == type) {
     next_token(compiler);
     return;
   }
 
-  error_at_current(parser, message);
+  error_at_current(&compiler->parser, message);
 }
 
 /**/
@@ -640,18 +595,16 @@ static void end_of_compilation(Compiler *compiler) {
 /**/
 
 static void synchronize(Compiler *compiler) {
-  Parser *parser = compiler->parser;
-
-  parser->panic_mode = false;
+  compiler->parser.panic_mode = false;
 
   /* syncronize parser to the next statement */
-  while (parser->current.type != TOKEN_EOF) {
+  while (compiler->parser.current.type != TOKEN_EOF) {
 
-    if (parser->prev.type == TOKEN_SEMICOLON) {
+    if (compiler->parser.prev.type == TOKEN_SEMICOLON) {
       return;
     }
 
-    switch (parser->current.type) {
+    switch (compiler->parser.current.type) {
     case TOKEN_CLASS:
     case TOKEN_FN:
     case TOKEN_LET:
@@ -672,11 +625,11 @@ static void synchronize(Compiler *compiler) {
 /**/
 
 static void emit_constant(Compiler *compiler, Value value) {
-  int32_t line = compiler->parser->prev.line;
+  int32_t line = compiler->parser.prev.line;
   bool valid = ant_chunk.write_constant(compiler->current_chunk, value, line);
 
   if (!valid) {
-    error(compiler->parser, "Too many constants in one chunk.");
+    error(&compiler->parser, "Too many constants in one chunk.");
   }
 }
 
@@ -684,25 +637,25 @@ static void emit_constant(Compiler *compiler, Value value) {
 
 static void emit_global_variable(Compiler *compiler, int32_t index, Callback write_global) {
 
-  int32_t line = compiler->parser->prev.line;
+  int32_t line = compiler->parser.prev.line;
   bool valid  = write_global(compiler->current_chunk, index, line);
 
   if (!valid) {
-    error(compiler->parser, "Too many global variables in one chunk.");
+    error(&compiler->parser, "Too many global variables in one chunk.");
   }
 }
 
 /**/
 
 static void emit_byte(Compiler *compiler, uint8_t byte) {
-  int32_t line = compiler->parser->prev.line;
+  int32_t line = compiler->parser.prev.line;
   ant_chunk.write(compiler->current_chunk, byte, line);
 }
 
 /**/
 
 static void emit_two_bytes(Compiler *compiler, uint8_t byte1, uint8_t byte2) {
-  int32_t line = compiler->parser->prev.line;
+  int32_t line = compiler->parser.prev.line;
   ant_chunk.write(compiler->current_chunk, byte1, line);
   ant_chunk.write(compiler->current_chunk, byte2, line);
 }
@@ -749,13 +702,6 @@ static void error_at(Parser *parser, const char *message) {
 
 /**/
 
-static void reset_parser(Parser *parser) {
-  parser->panic_mode = false;
-  parser->was_error = false;
-}
-
-/**/
-
 static ParseRule *get_rule(TokenType type) { return &rules[type]; }
 
 /* */
@@ -769,7 +715,7 @@ static bool match(Compiler *compiler, TokenType type) {
 }
 
 static bool check(Compiler *compiler, TokenType type) {
-  return compiler->parser->current.type == type;
+  return compiler->parser.current.type == type;
 }
 
 /**/

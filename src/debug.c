@@ -9,8 +9,7 @@
 
 static void disassemble_chunk(Chunk *chunk, const char *name);
 static int disassemble_instruction(Chunk *chunk, int offset);
-static void trace_parsing(const char *func_name, int32_t depth,
-                          const char *format, ...);
+static void trace_parsing(const char *func_name, int32_t depth, const char *format, ...);
 static void trace_tokens(Token prev, Token current, int32_t depth);
 static void trace_token(Token token, const char *name, int32_t depth);
 
@@ -37,7 +36,6 @@ static void disassemble_chunk(Chunk *chunk, const char *name) {
     offset = disassemble_instruction(chunk, offset);
     printf("\n");
   }
-
 }
 
 static void trace_parsing(const char *func_name, int32_t depth, const char *format, ...) {

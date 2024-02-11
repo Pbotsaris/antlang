@@ -5,15 +5,7 @@
 #include "scanner.h"
 #include "table.h"
 #include "var_mapping.h"
-
-typedef struct {
-  Token current;
-  Token prev;
-  bool was_error;
-  bool panic_mode;
-} Parser;
-
-//NOTE: Section 17.5
+#include "parser.h"
 
 typedef enum {
   PREC_NONE       = 0,  /* Lowest precedence */
@@ -31,7 +23,7 @@ typedef enum {
 
 typedef struct {
   Scanner *scanner;
-  Parser *parser;
+  Parser parser;
   Chunk *current_chunk;
   VarMapping globals;
 } Compiler;
@@ -42,5 +34,5 @@ typedef struct AntCompiler {
   void (*free)(Compiler *compiler);
 } AntCompilerAPI;
 
-extern AntCompilerAPI ant_compiler;
+const extern AntCompilerAPI ant_compiler;
 #endif
