@@ -4,6 +4,7 @@
 #include "common.h"
 #include "scanner.h"
 #include "table.h"
+#include "var_mapping.h"
 
 typedef struct {
   Token current;
@@ -32,7 +33,7 @@ typedef struct {
   Scanner *scanner;
   Parser *parser;
   Chunk *current_chunk;
-  Table globals_mapping;
+  VarMapping globals;
 } Compiler;
 
 typedef struct AntCompiler {

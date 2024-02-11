@@ -3,7 +3,7 @@
 
 #include "chunk.h"
 #include "compiler.h"
-#include "table.h"
+#include "config.h"
 
 typedef enum {
    INTERPRET_OK,
@@ -18,7 +18,7 @@ typedef struct VM{
    Value       stack[OPTION_STACK_MAX]; //TODO: make this dynamic
    Value*      stack_top;            
    Compiler*   compiler;            
-   Table       globals;
+   ValueArray  globals;
 }VM;
 
 typedef struct VM_API{

@@ -107,10 +107,8 @@ static void copy_table(Table *from, Table *to) {
   }
 }
 
-static ObjectString *find_key(Table *table, const char *chars, int32_t length,
-                              uint32_t hash) {
-  if (table->count == 0)
-    return NULL;
+static ObjectString *find_key(Table *table, const char *chars, int32_t length, uint32_t hash) {
+  if (table->count == 0) return NULL;
 
   uint32_t index = hash % table->capacity;
 

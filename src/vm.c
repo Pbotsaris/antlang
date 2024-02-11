@@ -40,10 +40,6 @@ static void print_stack(VM *vm);
 static Value peek_stack(VM *vm, int32_t distance);
 
 /* OP Helpeers */
-static bool get_global(VM *vm, ObjectString *name);
-static bool define_global(VM *vm, ObjectString *name);
-static bool set_global(VM *vm, ObjectString *name);
-
 static int32_t read_24bit_operand(VM *vm);
 static bool is_numeric_binary_op(VM *vm);
 static bool is_string_binary_op(VM *vm);
@@ -62,6 +58,7 @@ static VM *new_vm() {
   vm->chunk = NULL;
   vm->ip = NULL;
   vm->compiler = ant_compiler.new();
+  ant_value_array.init_nils(&vm->globals);
 
   return vm;
 }
@@ -115,7 +112,7 @@ static void free_vm(VM *vm) {
   ant_compiler.free(vm->compiler);
   ant_memory.free_objects();
   ant_string.free_all();
-  ant_table.free(&vm->globals);
+  ant_value_array.free(&vm->globals);
   free(vm);
 }
 
@@ -137,6 +134,11 @@ static InterpretResult run(VM *vm) {
     double a = ant_value.as_number(pop_stack(vm));                             \
     push_stack(vm, value_type(a op b));                                        \
   } while (false)
+
+#ifdef DEBUG_TRACE_EXECUTION
+      printf("\n== execution ==\n");
+#endif
+
 
     for (;;) {
 
@@ -243,50 +245,69 @@ static InterpretResult run(VM *vm) {
       }
 
       case OP_DEFINE_GLOBAL: {
-        ObjectString *name = ant_string.from_value(READ_CHUNK_CONSTANT());
-        bool valid         = define_global(vm, name);
-
-        if(!valid) return INTERPRET_RUNTIME_ERROR;
+        int32_t global_index = (int32_t)READ_CHUNK_BYTE();
+        ant_value_array.write_at(&vm->globals,pop_stack(vm), global_index);
         break;
       }
 
       case OP_DEFINE_GLOBAL_LONG: {
-        ObjectString *name = ant_string.from_value(READ_CHUNK_CONSTANT());
-        bool valid         = define_global(vm, name);
-
-        if(!valid) return INTERPRET_RUNTIME_ERROR;
+         int32_t global_index = read_24bit_operand(vm);
+         ant_value_array.write_at(&vm->globals,pop_stack(vm), global_index);
         break;
       }
 
       case OP_GET_GLOBAL: {
-        ObjectString *name = ant_string.from_value(READ_CHUNK_CONSTANT());
-        bool valid         = get_global(vm, name);
+        int32_t global_index = (int32_t)READ_CHUNK_BYTE();
+        Value value = ant_value_array.at(&vm->globals, global_index);
 
-        if (!valid) return INTERPRET_RUNTIME_ERROR;
+        if(ant_value.is_nil(value)){
+           runtime_error(vm, "Undefined variable");
+           return INTERPRET_RUNTIME_ERROR;
+        }
+
+        push_stack(vm, value);
         break;
       }
 
       case OP_GET_GLOBAL_LONG: {
-        ObjectString *name = ant_string.from_value(READ_CHUNK_LONG_CONSTANT());
-        bool valid         = get_global(vm, name);
+       int32_t global_index = read_24bit_operand(vm);
+       Value value          = ant_value_array.at(&vm->globals, global_index);
 
-        if (!valid) return INTERPRET_RUNTIME_ERROR;
+        if(ant_value.is_nil(value)){
+           runtime_error(vm, "Undefined variable");
+           return INTERPRET_RUNTIME_ERROR;
+        }
+
+        push_stack(vm, value);
         break;
       }
 
       case OP_SET_GLOBAL: {
-        ObjectString *name = ant_string.from_value(READ_CHUNK_CONSTANT());
-        bool valid = set_global(vm, name);
+       int32_t global_index = (int32_t)READ_CHUNK_BYTE();
+       Value value          = ant_value_array.at(&vm->globals, global_index);
 
-        if(!valid) return INTERPRET_RUNTIME_ERROR;
+       if(ant_value.is_nil(value)){
+           runtime_error(vm, "Undefined variable");
+           return INTERPRET_RUNTIME_ERROR;
+        }
+
+        // note that we peek the stack here.
+        // assigment is an expression, so we need to keep the value on the stack.
+        // in case the assignment is part of a larger expression.
+        ant_value_array.write_at(&vm->globals, peek_stack(vm, 0), global_index);
         break;
       }
 
      case OP_SET_GLOBAL_LONG: {
-        ObjectString *name = ant_string.from_value(READ_CHUNK_LONG_CONSTANT());
-        bool valid = set_global(vm, name);
+       int32_t global_index = read_24bit_operand(vm);
+       Value value          = ant_value_array.at(&vm->globals, global_index);
 
-        if(!valid) return INTERPRET_RUNTIME_ERROR;
+        if(ant_value.is_nil(value)){
+           runtime_error(vm, "Undefined variable");
+           return INTERPRET_RUNTIME_ERROR;
+        }
+
+        ant_value_array.write_at(&vm->globals, peek_stack(vm, 0), global_index);
         break;
       }
 
@@ -335,51 +356,6 @@ static int32_t read_24bit_operand(VM *vm) {
   vm->ip += CONST_24BITS;
   return index;
 }
-
-/**/
-
-static bool define_global(VM *vm, ObjectString *name){
-   bool is_new = ant_table.set(&vm->globals, name, pop_stack(vm));
-
-   if (!is_new) {
-      runtime_error(vm, "Variable '%s' already defined.", name->chars);;
-   }
-      
-   return is_new;
-}
-
-/**/
-
-static bool get_global(VM *vm, ObjectString *name) {
-  Value value;
-
-  bool valid = ant_table.get(&vm->globals, name, &value);
-
-  if (!valid) {
-    runtime_error(vm, "Undefined variable '%s'", name->chars);
-    return valid;
-  }
-
-  push_stack(vm, value);
-  return valid;
-}
-
-static bool set_global(VM *vm, ObjectString *name) {
-   // note that we peek the stack here.
-   // assigment is an expression, so we need to keep the value on the stack.
-   // in case the assignment is part of a larger expression.
-   bool is_new = ant_table.set(&vm->globals, name, peek_stack(vm, 0));
-
-   // if we have a new key, it means user assigned to an undefined variable.
-   if (is_new) {
-      ant_table.delete(&vm->globals, name);
-      runtime_error(vm, "Undefined variable '%s'", name->chars);
-      return false;
-   }
-
-   return true;
-}
-
 
 /**/
 

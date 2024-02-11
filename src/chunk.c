@@ -104,8 +104,7 @@ static int32_t add_constant(Chunk *chunk, Value constant) {
 
 /* */
 
-static bool write_define_global(Chunk *chunk, int32_t const_index,
-                                int32_t line) {
+static bool write_define_global(Chunk *chunk, int32_t const_index, int32_t line) {
   WithOperandArgs args = {
       .op_8bit = OP_DEFINE_GLOBAL,
       .op_24bit = OP_DEFINE_GLOBAL_LONG,

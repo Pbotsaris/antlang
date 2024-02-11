@@ -3,7 +3,6 @@
 #include "common.h"
 #include "lines.h"
 #include "value_array.h"
-#include "config.h"
 
 typedef enum {
   OP_RETURN,             /* no operand */
@@ -56,8 +55,8 @@ typedef struct AntChunk {
 
   /**
    * @brief Write a byte to the chunk, dynamically growing the array if needed.
-   * @param chunk chunk to write to
    * @param byte byte to write
+   * @param chunk chunk to write to
    * @param line line number of the byte
    * @details This function will automatically resize the internal array of instructions if the capacity is exceeded.
    */

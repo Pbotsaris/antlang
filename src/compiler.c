@@ -1,9 +1,10 @@
 #include <stdio.h>
-#include <stdlib.h>comp
+#include <stdlib.h>
 
 #include "compiler.h"
 #include "object.h"
 #include "strings.h"
+#include "config.h"
 
 #if defined(DEBUG_PRINT_CODE) || defined(DEBUG_TRACE_PARSER)
 #include "debug.h"
@@ -188,8 +189,8 @@ static Compiler *new_compiler(void) {
 
   compiler->parser->current = (Token){.length = -1, .line = -1, .type = TOKEN_EOF, .start = NULL};
   compiler->parser->prev = compiler->parser->current;
-  ant_table.init(&compiler->globals_mapping);
 
+  ant_mapping.init(&compiler->globals);
   return compiler;
 }
 
@@ -199,7 +200,7 @@ static void free_compiler(Compiler *compiler) {
   if (compiler == NULL) return;
 
   ant_scanner.free(compiler->scanner);
-  ant_table.free(&compiler->globals_mapping);
+  ant_mapping.free(&compiler->globals);
   free(compiler->parser);
   free(compiler);
 }
@@ -258,7 +259,7 @@ static void variable_declaration(Compiler *compiler) {
 
   // note that we do not emit a constant instruction here
   // that happens in define_variable below
-  uint8_t global_chunk_index = parse_variable(compiler, "Expected variable name.");
+  uint8_t globals_index = parse_variable(compiler, "Expected variable name.");
 
   if (match(compiler, TOKEN_EQUAL)) {
     expression(compiler);
@@ -270,7 +271,7 @@ static void variable_declaration(Compiler *compiler) {
   consume(compiler, TOKEN_SEMICOLON, "Expected ';' after variable declaration.");
 
   // actually emits instruction to define the variable
-  define_variable(compiler, global_chunk_index);
+  define_variable(compiler, globals_index);
   TRACE_PARSER_EXIT();
 }
 
@@ -530,14 +531,13 @@ void string(Compiler *compiler, bool can_assign) {
 
 /* Variables */
 
-static void define_variable(Compiler *compiler, int32_t index) {
+static void define_variable(Compiler *compiler, int32_t global_index) {
   Parser *parser = compiler->parser;
 
   TRACE_PARSER_ENTER("Compiler *compiler = %p", compiler);
   TRACE_PARSER_TOKEN(parser->prev, parser->current);
 
-  emit_global_variable(compiler, index, ant_chunk.write_define_global);
-
+  emit_global_variable(compiler, global_index, ant_chunk.write_define_global);
   TRACE_PARSER_EXIT();
 }
 
@@ -546,6 +546,7 @@ static void define_variable(Compiler *compiler, int32_t index) {
 static void named_variable(Compiler *compiler, Token name, bool can_assign) {
   TRACE_PARSER_ENTER("Compiler *compiler = %p", compiler);
   TRACE_PARSER_TOKEN(compiler->parser->prev, compiler->parser->current);
+
    int32_t const_index = make_identifier_constant(compiler, &name);
 
    if(can_assign && match(compiler, TOKEN_EQUAL)){
@@ -571,10 +572,11 @@ static int32_t parse_variable(Compiler *compiler, const char *message) {
   TRACE_PARSER_TOKEN(parser->prev, parser->current);
 
   consume(compiler, TOKEN_IDENTIFIER, message);
-  int32_t index = make_identifier_constant(compiler, &parser->prev);
 
+
+  int32_t globals_index = make_identifier_constant(compiler, &parser->prev);
   TRACE_PARSER_EXIT();
-  return index;
+  return globals_index;
 }
 
 /* Note that this function stores a constant but doesn't emit
@@ -583,10 +585,14 @@ static int32_t parse_variable(Compiler *compiler, const char *message) {
  * */
 
 static int32_t make_identifier_constant(Compiler *compiler, Token *token) {
-  ObjectString *str    = ant_string.make(token->start, token->length);
-  Value name           = ant_value.from_object(ant_string.as_object(str));
 
-  return ant_chunk.add_constant(compiler->current_chunk, name);
+  ObjectString *str    = ant_string.make(token->start, token->length);
+  //Value name           = ant_value.from_object(ant_string.as_object(str));
+
+  // mapping global variables using the compiler's globals table
+  // so vm can access value with O(1) direct indexing
+  Value globals_index  = ant_mapping.add(&compiler->globals, str);
+  return ant_value.as_number(globals_index);
 }
 
 /* Compilation steps */
@@ -677,6 +683,7 @@ static void emit_constant(Compiler *compiler, Value value) {
 /**/
 
 static void emit_global_variable(Compiler *compiler, int32_t index, Callback write_global) {
+
   int32_t line = compiler->parser->prev.line;
   bool valid  = write_global(compiler->current_chunk, index, line);
 
