@@ -123,8 +123,6 @@ static InterpretResult run(VM *vm) {
 #define READ_CHUNK_LONG_CONSTANT()                                             \
   (vm->chunk->constants.values[read_24bit_operand(vm)])
 
-  for (;;) {
-
 #define BINARY_OP(value_type, op)                                              \
   do {                                                                         \
     if (!is_numeric_binary_op(vm)) {                                           \
@@ -142,7 +140,6 @@ static InterpretResult run(VM *vm) {
 
 
     for (;;) {
-
 #ifdef DEBUG_TRACE_EXECUTION
       print_stack(vm);
 
@@ -327,7 +324,6 @@ static InterpretResult run(VM *vm) {
 #undef READ_CHUNK_CONSTANT
 #undef BINARY_OP
     }
-  }
 }
 
 /* Stack */
