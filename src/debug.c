@@ -1,8 +1,9 @@
 #include "debug.h"
 #include "config.h"
 #include "lines.h"
-#include "utils.h"
+#include "locals.h"
 #include "strings.h"
+#include "utils.h"
 #include "value_array.h"
 
 #include <stdarg.h>
@@ -10,7 +11,8 @@
 
 static void disassemble_chunk(Compiler *compiler, const char *name);
 static int disassemble_instruction(Compiler *compiler, int offset);
-static void trace_parsing(const char *func_name, int32_t depth, const char *format, ...);
+static void trace_parsing(const char *func_name, int32_t depth,
+                          const char *format, ...);
 static void trace_tokens(Token prev, Token current, int32_t depth);
 static void trace_token(Token token, const char *name, int32_t depth);
 
@@ -24,7 +26,8 @@ DebugAPI ant_debug = {
 /* helpers */
 static int32_t print_instruction(const char *name, int32_t offset);
 static int32_t print_constant_instruction(const char *name, Chunk *chunk, int32_t offset);
-static int32_t print_variable_instruction(const char *name, Compiler *compiler, int offset);
+static int32_t print_global_instruction(const char *name, Compiler *compiler, int offset);
+static int32_t print_local_instruction(const char *name, Compiler *compiler, int offset);
 
 static int32_t unpack_bitecode_operand(Chunk *chunk, int *offset);
 static bool is_long_constant(uint8_t opcode);
@@ -85,7 +88,8 @@ static int32_t disassemble_instruction(Compiler *compiler, int offset) {
 
   int32_t chunk_line = ant_line.get(&chunk->lines, offset);
 
-  bool same_line = offset > 0 && chunk_line == ant_line.get(&chunk->lines, offset - 1);
+  bool same_line =
+      offset > 0 && chunk_line == ant_line.get(&chunk->lines, offset - 1);
 
   if (same_line)
     printf("   | ");
@@ -145,22 +149,34 @@ static int32_t disassemble_instruction(Compiler *compiler, int offset) {
     return print_instruction("OP_POP", offset);
 
   case OP_DEFINE_GLOBAL:
-    return print_variable_instruction("OP_DEFINE_GLOBAL", compiler, offset);
+    return print_global_instruction("OP_DEFINE_GLOBAL", compiler, offset);
 
   case OP_DEFINE_GLOBAL_LONG:
-    return print_variable_instruction("OP_DEFINE_GLOBAL_LONG", compiler, offset);
+    return print_global_instruction("OP_DEFINE_GLOBAL_LONG", compiler, offset);
 
   case OP_GET_GLOBAL:
-    return print_variable_instruction("OP_GET_GLOBAL", compiler, offset);
+    return print_global_instruction("OP_GET_GLOBAL", compiler, offset);
 
   case OP_GET_GLOBAL_LONG:
-    return print_variable_instruction("OP_GET_GLOBAL_LONG", compiler, offset);
+    return print_global_instruction("OP_GET_GLOBAL_LONG", compiler, offset);
 
   case OP_SET_GLOBAL:
-    return print_variable_instruction("OP_SET_GLOBAL", compiler, offset);
+    return print_global_instruction("OP_SET_GLOBAL", compiler, offset);
 
   case OP_SET_GLOBAL_LONG:
-    return print_variable_instruction("OP_SET_GLOBAL_LONG", compiler, offset);
+    return print_global_instruction("OP_SET_GLOBAL_LONG", compiler, offset);
+
+  case OP_GET_LOCAL:
+    return print_local_instruction("OP_GET_LOCAL", compiler, offset);
+
+  case OP_GET_LOCAL_LONG:
+    return print_local_instruction("OP_GET_LOCAL_LONG", compiler, offset);
+
+  case OP_SET_LOCAL:
+    return print_local_instruction("OP_SET_LOCAL", compiler, offset);
+
+  case OP_SET_LOCAL_LONG:
+    return print_local_instruction("OP_SET_LOCAL_LONG", compiler, offset);
 
   case OP_CONSTANT:
     return print_constant_instruction("OP_CONSTANT", chunk, offset);
@@ -179,7 +195,7 @@ static int32_t print_instruction(const char *name, int offset) {
   return offset + 1;
 }
 
-static int32_t print_variable_instruction(const char *name, Compiler *compiler, int offset) {
+static int32_t print_global_instruction(const char *name, Compiler *compiler, int offset) {
 
   Chunk *chunk = compiler->current_chunk;
   int32_t global_index = unpack_bitecode_operand(chunk, &offset);
@@ -189,6 +205,15 @@ static int32_t print_variable_instruction(const char *name, Compiler *compiler, 
 
   printf("Global");
   ant_string.print(global_name);
+  return offset;
+}
+
+static int32_t print_local_instruction(const char *name, Compiler *compiler, int32_t offset) {
+  Chunk *chunk = compiler->current_chunk;
+  int32_t local_index = unpack_bitecode_operand(chunk, &offset);
+
+  printf("%-16s %4d:", name, local_index);
+  ant_locals.print(&compiler->locals, local_index);
 
   return offset;
 }
@@ -229,5 +254,6 @@ static int32_t unpack_bitecode_operand(Chunk *chunk, int *offset) {
 
 static bool is_long_constant(uint8_t opcode) {
   return opcode == OP_CONSTANT_LONG || opcode == OP_DEFINE_GLOBAL_LONG ||
-         opcode == OP_GET_GLOBAL_LONG || opcode == OP_SET_GLOBAL_LONG;
+         opcode == OP_GET_GLOBAL_LONG || opcode == OP_SET_GLOBAL_LONG ||
+         opcode == OP_GET_LOCAL_LONG || opcode == OP_SET_LOCAL_LONG;
 }

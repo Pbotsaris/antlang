@@ -2,9 +2,9 @@
 #include <stdlib.h>
 
 #include "compiler.h"
+#include "config.h"
 #include "object.h"
 #include "strings.h"
-#include "config.h"
 
 #if defined(DEBUG_PRINT_CODE) || defined(DEBUG_TRACE_PARSER)
 #include "debug.h"
@@ -44,7 +44,7 @@ static int32_t trace_depth = 0;
 #endif
 
 // write global variable callback
-typedef bool(*Callback)(Chunk* chunk, int32_t const_index, int32_t line);
+typedef bool (*Callback)(Chunk *chunk, int32_t const_index, int32_t line);
 
 /* Public */
 static void init_compiler(Compiler *compiler);
@@ -62,11 +62,13 @@ static void declaration(Compiler *compiler);
 static void variable_declaration(Compiler *compiler);
 static void statement(Compiler *compiler);
 static void print_statement(Compiler *compiler);
+static void block(Compiler *compiler);
 static void expression_statement(Compiler *compiler);
 static void expression(Compiler *compiler);
 
 static void number(Compiler *compiler, bool can_assign);
-static void grouping(Compiler *compiler, bool can_assign);;
+static void grouping(Compiler *compiler, bool can_assign);
+;
 static void unary(Compiler *compiler, bool can_assign);
 static void binary(Compiler *compiler, bool can_assign);
 static void variable(Compiler *compiler, bool can_assign);
@@ -75,7 +77,8 @@ static void string(Compiler *compiler, bool can_assign);
 
 /* Parser Rules */
 
-typedef void (*ParserFunc)(Compiler *, bool can_assign);;
+typedef void (*ParserFunc)(Compiler *, bool can_assign);
+;
 
 /*  ParseRule: a row in the rules table
  *
@@ -139,10 +142,15 @@ ParseRule rules[] = {
 static void parse_pressedence(Compiler *compile, Presedence presedence);
 
 /* variables */
-static void define_variable(Compiler *compiler, int32_t index);
+static void define_global_variable(Compiler *compiler, int32_t index);
+static void declare_local_variable(Compiler *compiler);
 static void named_variable(Compiler *compiler, Token name, bool can_assign);
 static int32_t parse_variable(Compiler *compiler, const char *message);
-static int32_t make_identifier_constant(Compiler *compiler, Token *token);
+static int32_t make_global_identifier(Compiler *compiler, Token *token);
+
+/* Block */
+static void begin_scope(Compiler *compiler);
+static void end_scope(Compiler *compiler);
 
 /* Compiling steps */
 static void next_token(Compiler *compiler);
@@ -152,7 +160,7 @@ static void synchronize(Compiler *compiler);
 
 /* Emitting Opcodes and values */
 static void emit_constant(Compiler *compiler, Value value);
-static void emit_global_variable(Compiler *compiler, int32_t index, Callback callback);
+static void emit_variable(Compiler *compiler, int32_t index, Callback callback);
 static void emit_byte(Compiler *compiler, uint8_t byte);
 static void emit_two_bytes(Compiler *compiler, uint8_t byte1, uint8_t byte2);
 
@@ -166,15 +174,17 @@ static const char *precedence_name(Presedence presedence);
 static bool match(Compiler *compiler, TokenType type);
 static bool check(Compiler *compiler, TokenType type);
 static ParseRule *get_rule(TokenType type);
+static bool is_global(int32_t local_index);
 
 /* Compiler API */
 static void init_compiler(Compiler *compiler) {
 
-   /* scanner gets initialize on compile method */
+  /* scanner gets initialize on compile method */
   ant_parser.init(&compiler->parser);
   ant_mapping.init(&compiler->globals);
+  ant_locals.init(&compiler->locals);
 
-   /* current_chunk gets populate in compile method */
+  /* current_chunk gets populate in compile method */
   compiler->current_chunk = NULL;
 }
 
@@ -247,8 +257,14 @@ static void variable_declaration(Compiler *compiler) {
 
   consume(compiler, TOKEN_SEMICOLON, "Expected ';' after variable declaration.");
 
-  // actually emits instruction to define the variable
-  define_variable(compiler, globals_index);
+  if(compiler->locals.depth > 0){
+   // we have a local variable
+    TRACE_PARSER_EXIT();
+    return;
+  }
+
+  // actually emits instruction to define a global variable
+  define_global_variable(compiler, globals_index);
   TRACE_PARSER_EXIT();
 }
 
@@ -261,11 +277,29 @@ static void statement(Compiler *compiler) {
   if (match(compiler, TOKEN_PRINT)) {
     print_statement(compiler);
 
+  } else if (match(compiler, TOKEN_LEFT_BRACE)) {
+
+    begin_scope(compiler);
+    block(compiler);
+    end_scope(compiler);
+
   } else {
     expression_statement(compiler);
   }
 
   TRACE_PARSER_EXIT();
+}
+
+/**/
+
+static void block(Compiler *compiler) {
+
+ // blocks may have multiple declarations, statements including nested blocks
+  while (!check(compiler, TOKEN_RIGHT_BRACE) && !check(compiler, TOKEN_EOF)) {
+    declaration(compiler);
+  }
+
+  consume(compiler, TOKEN_RIGHT_BRACE, "Expected '}' after block.");
 }
 
 /**/
@@ -307,12 +341,13 @@ static void expression(Compiler *compiler) {
 /**/
 
 static void parse_pressedence(Compiler *compiler, Presedence presedence) {
-  TRACE_PARSER_ENTER("Compiler *compiler = %p, Presedence presedence = %s", compiler, precedence_name(presedence));
+  TRACE_PARSER_ENTER("Compiler *compiler = %p, Presedence presedence = %s",
+                     compiler, precedence_name(presedence));
   TRACE_PARSER_TOKEN(compiler->parser.prev, compiler->parser.current);
 
   next_token(compiler);
 
-  TokenType prev_type    = compiler->parser.prev.type;
+  TokenType prev_type = compiler->parser.prev.type;
   ParserFunc prefix_rule = get_rule(prev_type)->prefix;
 
   // the first token should always belong to a prefix expression
@@ -332,13 +367,14 @@ static void parse_pressedence(Compiler *compiler, Presedence presedence) {
     TokenType prev_type = compiler->parser.prev.type;
     ParserFunc infix_rule = get_rule(prev_type)->infix;
 
-    infix_rule(compiler, can_assign);;
+    infix_rule(compiler, can_assign);
+    ;
   }
 
   // variable did not consume = because it's not an assignment
   // report an error
-  if(can_assign && match(compiler, TOKEN_EQUAL)){
-     error(&compiler->parser, "Invalid assignment target.");
+  if (can_assign && match(compiler, TOKEN_EQUAL)) {
+    error(&compiler->parser, "Invalid assignment target.");
   }
 
   TRACE_PARSER_EXIT();
@@ -400,7 +436,8 @@ static void binary(Compiler *compiler, bool _) {
   TokenType operator_type = compiler->parser.prev.type;
   ParseRule *rule = get_rule(operator_type);
 
-  /* call parse presendence with one level higher because binary operators are left associative */
+  /* call parse presendence with one level higher because binary operators are
+   * left associative */
   parse_pressedence(compiler, (Presedence)(rule->presedence + 1));
 
   switch (operator_type) {
@@ -444,11 +481,11 @@ static void binary(Compiler *compiler, bool _) {
 }
 
 /* */
-static void variable(Compiler *compiler, bool can_assign){
-   TRACE_PARSER_ENTER("Compiler *compiler = %p", compiler);
-   TRACE_PARSER_TOKEN(compiler->parser.prev, compiler->parser.current);
-   named_variable(compiler, compiler->parser.prev, can_assign);
-   TRACE_PARSER_EXIT();
+static void variable(Compiler *compiler, bool can_assign) {
+  TRACE_PARSER_ENTER("Compiler *compiler = %p", compiler);
+  TRACE_PARSER_TOKEN(compiler->parser.prev, compiler->parser.current);
+  named_variable(compiler, compiler->parser.prev, can_assign);
+  TRACE_PARSER_EXIT();
 }
 
 /* */
@@ -478,7 +515,7 @@ static void literal(Compiler *compiler, bool _) {
 
 void string(Compiler *compiler, bool _) {
   const char *chars = compiler->parser.prev.start + 1; // skip the first quote
-  int32_t length = compiler->parser.prev.length - 2;   // skip the first and last quote
+  int32_t length = compiler->parser.prev.length - 2; // skip the first and last quote
   ObjectString *string = ant_string.make(chars, length);
   Value value = ant_value.from_object(ant_string.as_object(string));
 
@@ -487,12 +524,37 @@ void string(Compiler *compiler, bool _) {
 
 /* Variables */
 
-static void define_variable(Compiler *compiler, int32_t global_index) {
+static void define_global_variable(Compiler *compiler, int32_t global_index) {
   TRACE_PARSER_ENTER("Compiler *compiler = %p", compiler);
   TRACE_PARSER_TOKEN(compiler->parser.prev, compiler->parser.current);
 
-  emit_global_variable(compiler, global_index, ant_chunk.write_define_global);
+  emit_variable(compiler, global_index, ant_chunk.write_define_global);
   TRACE_PARSER_EXIT();
+}
+
+
+static void declare_local_variable(Compiler *compiler){
+  TRACE_PARSER_ENTER("Compiler *compiler = %p", compiler);
+  TRACE_PARSER_TOKEN(compiler->parser.prev, compiler->parser.current);
+
+   if(compiler->locals.depth == 0){
+     TRACE_PARSER_EXIT();
+     return;
+   }
+
+   if(compiler->locals.count == OPTION_STACK_MAX){
+      error(&compiler->parser, "Too many local variables in scope.");
+   }
+
+   Token *token = &compiler->parser.prev;
+   bool valid = ant_locals.validate_scope(&compiler->locals, token);
+
+   if(!valid){
+      error(&compiler->parser, "Variable with this name already declared in this scope.");
+   }
+
+   ant_locals.push(&compiler->locals, *token);
+   TRACE_PARSER_EXIT();
 }
 
 /* */
@@ -501,21 +563,22 @@ static void named_variable(Compiler *compiler, Token name, bool can_assign) {
   TRACE_PARSER_ENTER("Compiler *compiler = %p", compiler);
   TRACE_PARSER_TOKEN(compiler->parser.prev, compiler->parser.current);
 
-   int32_t const_index = make_identifier_constant(compiler, &name);
+  /* setting up for local or global variables */
+  int32_t local    = ant_locals.resolve(&compiler->locals, &name);
+  int32_t index    = is_global(local) ? make_global_identifier(compiler, &name) : local;
+  Callback get     = is_global(local) ? ant_chunk.write_get_global : ant_chunk.write_get_local;
+  Callback set     = is_global(local) ? ant_chunk.write_set_global : ant_chunk.write_set_local;
+  
+  if (can_assign && match(compiler, TOKEN_EQUAL)) {
+    expression(compiler); // on assigment, parse the expression after the equal sign
+    emit_variable(compiler, index, set);
 
-   if(can_assign && match(compiler, TOKEN_EQUAL)){
-      // on assigment, parse the expression after the equal sign
-      expression(compiler);
-      emit_global_variable(compiler, const_index, ant_chunk.write_set_global);
-
-   } else {
-      emit_global_variable(compiler, const_index, ant_chunk.write_get_global);
-   }
-
+  } else {
+    emit_variable(compiler, index, get);
+  }
 
   TRACE_PARSER_EXIT();
 }
-
 
 /* */
 
@@ -526,7 +589,15 @@ static int32_t parse_variable(Compiler *compiler, const char *message) {
 
   consume(compiler, TOKEN_IDENTIFIER, message);
 
-  int32_t globals_index = make_identifier_constant(compiler, &compiler->parser.prev);
+  // if we are in a block, we are parsing a local variable
+  
+  declare_local_variable(compiler); // does not emit any instruction
+  if(compiler->locals.depth > 0){
+    TRACE_PARSER_EXIT();
+    return -1; // dummy value
+  }
+
+  int32_t globals_index = make_global_identifier(compiler, &compiler->parser.prev);
   TRACE_PARSER_EXIT();
   return globals_index;
 }
@@ -535,17 +606,40 @@ static int32_t parse_variable(Compiler *compiler, const char *message) {
  * emit a constant instruction. So we are returning the index in the
  * constant array so a later instruction can use it.
  * */
+static int32_t make_global_identifier(Compiler *compiler, Token *token) {
 
-static int32_t make_identifier_constant(Compiler *compiler, Token *token) {
-
-  ObjectString *str    = ant_string.make(token->start, token->length);
-  //Value name           = ant_value.from_object(ant_string.as_object(str));
+  ObjectString *str = ant_string.make(token->start, token->length);
 
   // mapping global variables using the compiler's globals table
   // so vm can access value with O(1) direct indexing
-  Value globals_index  = ant_mapping.add(&compiler->globals, str);
+  Value globals_index = ant_mapping.add(&compiler->globals, str);
   return ant_value.as_number(globals_index);
 }
+
+/* Block */
+
+static void begin_scope(Compiler *compiler) {
+   printf("begin_scope\n");
+   compiler->locals.depth++;
+}
+
+/* */
+
+static void end_scope(Compiler *compiler){
+   printf("end_scope\n");
+   compiler->locals.depth--;
+
+   LocalStack *stack = &compiler->locals;
+
+   // clean up locals that are no longer in scope
+   // when we reach current stack->depth, we stop
+   while(stack->count > 0 && 
+         stack->locals[stack->count - 1].depth == stack->depth){
+      emit_byte(compiler, OP_POP);
+      stack->count--;
+   }
+}
+
 
 /* Compilation steps */
 
@@ -564,7 +658,7 @@ static void next_token(Compiler *compiler) {
   }
 }
 
-/**/
+/* */
 
 static void consume(Compiler *compiler, TokenType type, const char *message) {
 
@@ -629,10 +723,10 @@ static void emit_constant(Compiler *compiler, Value value) {
 
 /**/
 
-static void emit_global_variable(Compiler *compiler, int32_t index, Callback write_global) {
+static void emit_variable(Compiler *compiler, int32_t index, Callback write_variable) {
 
   int32_t line = compiler->parser.prev.line;
-  bool valid  = write_global(compiler->current_chunk, index, line);
+  bool valid = write_variable(compiler->current_chunk, index, line);
 
   if (!valid) {
     error(&compiler->parser, "Too many global variables in one chunk.");
@@ -710,6 +804,10 @@ static bool match(Compiler *compiler, TokenType type) {
 
 static bool check(Compiler *compiler, TokenType type) {
   return compiler->parser.current.type == type;
+}
+
+static bool is_global(int32_t local_index) {
+  return local_index == -1;
 }
 
 /**/

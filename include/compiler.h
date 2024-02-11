@@ -5,6 +5,8 @@
 #include "scanner.h"
 #include "var_mapping.h"
 #include "parser.h"
+#include "config.h"
+#include "locals.h"
 
 typedef enum {
   PREC_NONE       = 0,  /* Lowest precedence */
@@ -20,11 +22,13 @@ typedef enum {
   PREC_PRIMARY   = 10, /*       Highest     */
 } Presedence;
 
+
 typedef struct {
   Scanner scanner;
   Parser parser;
   Chunk *current_chunk;
   VarMapping globals;
+  LocalStack locals;
 } Compiler;
 
 typedef struct AntCompiler {

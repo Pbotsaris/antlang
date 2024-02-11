@@ -27,6 +27,10 @@ typedef enum {
   OP_GET_GLOBAL_LONG,    /* 24-bit operand */
   OP_SET_GLOBAL,         /* 8-bit operand */
   OP_SET_GLOBAL_LONG,    /* 24-bit operand */
+  OP_SET_LOCAL,          /* 8-bit operand */
+  OP_SET_LOCAL_LONG,     /* 24-bit operand */
+  OP_GET_LOCAL,          /* 8-bit operand */
+  OP_GET_LOCAL_LONG,     /* 24-bit operand */
   OP_CONSTANT,           /* 8-bit operand */
   OP_CONSTANT_LONG,      /* 24-bit operand */
 } OpCode;
@@ -78,9 +82,11 @@ typedef struct AntChunk {
    * @returns the index of the constant in the chunk's constant array. If < 0, an error occurred.
    */
   bool (*write_constant)      (Chunk *chunk, Value value, int32_t line);
-  bool (*write_define_global) (Chunk *chunk, int32_t const_index, int32_t line);
-  bool (*write_get_global)    (Chunk *chunk, int32_t const_index, int32_t line);
-  bool (*write_set_global)    (Chunk *chunk, int32_t const_index, int32_t line);
+  bool (*write_define_global) (Chunk *chunk, int32_t global_index, int32_t line);
+  bool (*write_get_global)    (Chunk *chunk, int32_t global_index, int32_t line);
+  bool (*write_set_global)    (Chunk *chunk, int32_t global_index, int32_t line);
+  bool (*write_get_local)     (Chunk *chunk, int32_t local_index, int32_t line);
+  bool (*write_set_local)     (Chunk *chunk, int32_t local_index, int32_t line);
 } AntChunkAPI;
 
 extern AntChunkAPI ant_chunk;

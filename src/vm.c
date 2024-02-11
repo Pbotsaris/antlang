@@ -163,7 +163,7 @@ static InterpretResult run(VM *vm) {
         }
 
         double num = ant_value.as_number(pop_stack(vm));
-        Value val = ant_value.from_number(num * -1);
+        Value val  = ant_value.from_number(num * -1);
         push_stack(vm, val);
         break;
       }
@@ -239,6 +239,30 @@ static InterpretResult run(VM *vm) {
         /* OP_POP discards the top value from the stack */
       case OP_POP: {
         pop_stack(vm);
+        break;
+      }
+
+      case OP_GET_LOCAL:{
+        int32_t index = (int32_t)READ_CHUNK_BYTE();
+        push_stack(vm, vm->stack[index]); // move local variable to the top of the stack
+        break;
+      }
+
+      case OP_GET_LOCAL_LONG: {
+        int32_t index = read_24bit_operand(vm);
+        push_stack(vm, vm->stack[index]);
+        break;
+      }
+
+      case OP_SET_LOCAL : {
+         int32_t index    = (int32_t)READ_CHUNK_BYTE();
+         vm->stack[index] = peek_stack(vm, 0);
+         break;
+      }
+
+      case OP_SET_LOCAL_LONG: {
+        int32_t index    = read_24bit_operand(vm);
+        vm->stack[index] = peek_stack(vm, 0);
         break;
       }
 
