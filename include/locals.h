@@ -7,6 +7,9 @@
 #include "chunk.h"
 
 
+#define LOCALS_UNINITIALIZED -1
+#define LOCALS_NOT_FOUND -2
+
 typedef void(*ClearCallback)(OpCode);
 
 typedef struct {
@@ -22,12 +25,13 @@ typedef struct {
 
 
 typedef struct {
-   void        (*init)           (LocalStack* stack);
-   void        (*push)           (LocalStack* stack, Token name);
-   bool        (*validate_scope) (LocalStack* stack, Token *name);
-   void        (*clear_scope)    (LocalStack* stack, ClearCallback callback);
-   int32_t     (*resolve)        (LocalStack* stack, Token *name);
-   void        (*print)          (LocalStack* stack, int32_t index);
+   void        (*init)             (LocalStack* stack);
+   void        (*push)             (LocalStack* stack, Token name);
+   bool        (*validate_scope)   (LocalStack* stack, Token *name);
+   void        (*mark_initialized) (LocalStack* stack);
+   void        (*clear_scope)      (LocalStack* stack, ClearCallback callback);
+   int32_t     (*resolve)          (LocalStack* stack, Token *name);
+   void        (*print)            (LocalStack* stack, int32_t index);
 }LocalStackAPI;
 
 const extern LocalStackAPI ant_locals;

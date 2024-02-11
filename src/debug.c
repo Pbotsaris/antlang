@@ -209,6 +209,7 @@ static int32_t print_global_instruction(const char *name, Compiler *compiler, in
 }
 
 static int32_t print_local_instruction(const char *name, Compiler *compiler, int32_t offset) {
+
   Chunk *chunk = compiler->current_chunk;
   int32_t local_index = unpack_bitecode_operand(chunk, &offset);
 

@@ -143,6 +143,7 @@ static void parse_pressedence(Compiler *compile, Presedence presedence);
 
 /* variables */
 static void define_global_variable(Compiler *compiler, int32_t index);
+static void define_local_variable(Compiler *compiler);
 static void declare_local_variable(Compiler *compiler);
 static void named_variable(Compiler *compiler, Token name, bool can_assign);
 static int32_t parse_variable(Compiler *compiler, const char *message);
@@ -258,7 +259,7 @@ static void variable_declaration(Compiler *compiler) {
   consume(compiler, TOKEN_SEMICOLON, "Expected ';' after variable declaration.");
 
   if(compiler->locals.depth > 0){
-   // we have a local variable
+    define_local_variable(compiler);
     TRACE_PARSER_EXIT();
     return;
   }
@@ -533,6 +534,14 @@ static void define_global_variable(Compiler *compiler, int32_t global_index) {
 }
 
 
+static void define_local_variable(Compiler *compiler) {
+  TRACE_PARSER_ENTER("Compiler *compiler = %p", compiler);
+  TRACE_PARSER_TOKEN(compiler->parser.prev, compiler->parser.current);
+  ant_locals.mark_initialized(&compiler->locals);
+  TRACE_PARSER_EXIT();
+}
+
+
 static void declare_local_variable(Compiler *compiler){
   TRACE_PARSER_ENTER("Compiler *compiler = %p", compiler);
   TRACE_PARSER_TOKEN(compiler->parser.prev, compiler->parser.current);
@@ -564,7 +573,13 @@ static void named_variable(Compiler *compiler, Token name, bool can_assign) {
   TRACE_PARSER_TOKEN(compiler->parser.prev, compiler->parser.current);
 
   /* setting up for local or global variables */
+
   int32_t local    = ant_locals.resolve(&compiler->locals, &name);
+
+  if(local == LOCALS_UNINITIALIZED){
+     error(&compiler->parser, "Cannot read local variable in its own initializer.");
+  }
+
   int32_t index    = is_global(local) ? make_global_identifier(compiler, &name) : local;
   Callback get     = is_global(local) ? ant_chunk.write_get_global : ant_chunk.write_get_local;
   Callback set     = is_global(local) ? ant_chunk.write_set_global : ant_chunk.write_set_local;
@@ -619,14 +634,12 @@ static int32_t make_global_identifier(Compiler *compiler, Token *token) {
 /* Block */
 
 static void begin_scope(Compiler *compiler) {
-   printf("begin_scope\n");
    compiler->locals.depth++;
 }
 
 /* */
 
 static void end_scope(Compiler *compiler){
-   printf("end_scope\n");
    compiler->locals.depth--;
 
    LocalStack *stack = &compiler->locals;
@@ -807,7 +820,7 @@ static bool check(Compiler *compiler, TokenType type) {
 }
 
 static bool is_global(int32_t local_index) {
-  return local_index == -1;
+  return local_index == LOCALS_NOT_FOUND;
 }
 
 /**/
