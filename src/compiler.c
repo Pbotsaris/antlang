@@ -47,12 +47,12 @@ static int32_t trace_depth = 0;
 typedef bool(*Callback)(Chunk* chunk, int32_t const_index, int32_t line);
 
 /* Public */
-static Compiler *new_compiler(void);
+static void init_compiler(Compiler *compiler);
 static bool compile(Compiler *compiler, const char *source, Chunk *chunk);
 static void free_compiler(Compiler *compiler);
 
 const AntCompilerAPI ant_compiler = {
-    .new = new_compiler,
+    .init = init_compiler,
     .compile = compile,
     .free = free_compiler,
 };
@@ -168,25 +168,21 @@ static bool check(Compiler *compiler, TokenType type);
 static ParseRule *get_rule(TokenType type);
 
 /* Compiler API */
-static Compiler *new_compiler(void) {
-  Compiler *compiler = (Compiler *)malloc(sizeof(Compiler));
+static void init_compiler(Compiler *compiler) {
 
-  if (compiler == NULL) {
-    fprintf(stderr, "Could not allocate memory for compiler\n");
-    exit(1);
-  }
-
+   /* scanner gets initialize on compile method */
   ant_parser.init(&compiler->parser);
   ant_mapping.init(&compiler->globals);
-  return compiler;
+
+   /* current_chunk gets populate in compile method */
+  compiler->current_chunk = NULL;
 }
 
 /**/
 
 static void free_compiler(Compiler *compiler) {
-  if (compiler == NULL) return;
+  /* current_chunk gets freed in vm */
   ant_mapping.free(&compiler->globals);
-  free(compiler);
 }
 
 /**/

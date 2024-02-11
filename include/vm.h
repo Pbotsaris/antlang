@@ -17,7 +17,7 @@ typedef struct VM{
    uint8_t*    ip;                   
    Value       stack[OPTION_STACK_MAX]; //TODO: make this dynamic
    Value*      stack_top;            
-   Compiler*   compiler;            
+   Compiler    compiler;            
    ValueArray  globals;
 }VM;
 

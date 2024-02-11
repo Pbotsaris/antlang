@@ -57,7 +57,8 @@ static VM *new_vm() {
 
   vm->chunk = NULL;
   vm->ip = NULL;
-  vm->compiler = ant_compiler.new();
+
+  ant_compiler.init(&vm->compiler);
   ant_value_array.init_nils(&vm->globals);
 
   return vm;
@@ -68,7 +69,7 @@ static InterpretResult interpret(VM *vm, const char *source) {
   Chunk chunk;
   ant_chunk.init(&chunk);
 
-  bool valid = ant_compiler.compile(vm->compiler, source, &chunk);
+  bool valid = ant_compiler.compile(&vm->compiler, source, &chunk);
 
   if (!valid) {
     ant_chunk.free(&chunk);
@@ -109,7 +110,7 @@ static void repl(VM *vm) {
 }
 
 static void free_vm(VM *vm) {
-  ant_compiler.free(vm->compiler);
+  ant_compiler.free(&vm->compiler);
   ant_memory.free_objects();
   ant_string.free_all();
   ant_value_array.free(&vm->globals);

@@ -28,7 +28,7 @@ typedef struct {
 } Compiler;
 
 typedef struct AntCompiler {
-  Compiler *(*new)(void);
+  void (*init)(Compiler *compiler);;
   bool (*compile)(Compiler *compiler, const char *source, Chunk *chunk);
   void (*free)(Compiler *compiler);
 } AntCompilerAPI;
