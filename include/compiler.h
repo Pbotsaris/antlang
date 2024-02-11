@@ -3,7 +3,6 @@
 #include "chunk.h"
 #include "common.h"
 #include "scanner.h"
-#include "table.h"
 #include "var_mapping.h"
 #include "parser.h"
 
@@ -22,7 +21,7 @@ typedef enum {
 } Presedence;
 
 typedef struct {
-  Scanner *scanner;
+  Scanner scanner;
   Parser parser;
   Chunk *current_chunk;
   VarMapping globals;

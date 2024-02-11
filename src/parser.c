@@ -8,7 +8,6 @@ void init_parser(Parser *parser){
    parser->panic_mode = false;
 }
 
-
 void reset_parser(Parser *parser){
    parser->was_error = false;
    parser->panic_mode = false;
@@ -16,4 +15,5 @@ void reset_parser(Parser *parser){
 
 const ParserAPI ant_parser = {
    .init = init_parser,
+   .reset = reset_parser,
 };

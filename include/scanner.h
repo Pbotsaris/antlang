@@ -9,9 +9,7 @@ typedef struct {
 }Scanner;
 
 typedef struct AntScanner{
-   Scanner* (*new)(void);
    void (*init)(Scanner *scanner, const char* source);
-   void (*free)(Scanner* scanner);
    Token (*scan_token)(Scanner* scanner);
 }AntScannerAPI;
 

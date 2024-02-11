@@ -176,7 +176,6 @@ static Compiler *new_compiler(void) {
     exit(1);
   }
 
-  compiler->scanner = ant_scanner.new();
   ant_parser.init(&compiler->parser);
   ant_mapping.init(&compiler->globals);
   return compiler;
@@ -186,7 +185,6 @@ static Compiler *new_compiler(void) {
 
 static void free_compiler(Compiler *compiler) {
   if (compiler == NULL) return;
-  ant_scanner.free(compiler->scanner);
   ant_mapping.free(&compiler->globals);
   free(compiler);
 }
@@ -194,7 +192,7 @@ static void free_compiler(Compiler *compiler) {
 /**/
 
 static bool compile(Compiler *compiler, const char *source, Chunk *chunk) {
-  ant_scanner.init(compiler->scanner, source);
+  ant_scanner.init(&compiler->scanner, source);
 
   compiler->current_chunk = chunk;
   ant_parser.reset(&compiler->parser);
@@ -560,7 +558,7 @@ static void next_token(Compiler *compiler) {
   compiler->parser.prev = compiler->parser.current;
 
   while (true) {
-    compiler->parser.current = ant_scanner.scan_token(compiler->scanner);
+    compiler->parser.current = ant_scanner.scan_token(&compiler->scanner);
 
     if (compiler->parser.current.type != TOKEN_ERROR) {
       break;

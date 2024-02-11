@@ -4,15 +4,11 @@
 #include <string.h>
 
 static void init_scanner(Scanner *scanner, const char *source);
-static Scanner *new_scanner(void);
-static void free_scanner(Scanner *scanner);
 static Token scan_token(Scanner *scanner);
 static Token error_token(const char *message);
 
 AntScannerAPI ant_scanner = {
     .init = init_scanner,
-    .new = new_scanner,
-    .free = free_scanner,
     .scan_token = scan_token,
 };
 
@@ -43,17 +39,6 @@ static void init_scanner(Scanner *scanner, const char *source) {
   scanner->line = 1;
 }
 
-static Scanner *new_scanner(void) {
-  Scanner *scanner = (Scanner *)malloc(sizeof(Scanner));
-
-  if (scanner == NULL) {
-    fprintf(stderr, "Could not allocate memory for scanner\n");
-    exit(1);
-  }
-
-  return scanner;
-}
-
 static Token scan_token(Scanner *scanner) {
 
   skip_whitespace(scanner);
@@ -62,7 +47,6 @@ static Token scan_token(Scanner *scanner) {
   if (reached_end(scanner))
     return (Token){
         .type = TOKEN_EOF, .start = "EOF", .length = 3, .line = scanner->line};
-
 
   char c = eat_char(scanner);
 
@@ -124,13 +108,6 @@ static Token scan_token(Scanner *scanner) {
   }
 
   return error_token("Unexpected character.");
-}
-
-static void free_scanner(Scanner *scanner) {
-  if (scanner == NULL)
-    return;
-
-  free(scanner);
 }
 
 /* Helpers */
