@@ -16,6 +16,7 @@ static Object *value_to_object(Value value);
 
 static Value equals(Value a, Value b);
 static Value is_falsey(Value value);
+static bool is_falsey_bool(Value value);
 
 static bool is_bool(Value value);
 static bool is_number(Value value);
@@ -38,7 +39,9 @@ ValueAPI ant_value = {.from_bool = value_from_bool,
                       .is_object = is_object,
                       .print = print_value,
                       .equals = equals,
-                      .is_falsey = is_falsey};
+                      .is_falsey = is_falsey,
+                      .is_falsey_bool = is_falsey_bool,
+};
 
 /* */
 static Value value_from_bool(bool value) {
@@ -114,6 +117,10 @@ static bool is_object(Value value) { return value.type == VAL_OBJECT; }
 static Value is_falsey(Value value) {
   bool boolean = is_nil(value) || (is_bool(value) && !value.as.boolean);
   return value_from_bool(boolean);
+}
+
+static bool is_falsey_bool(Value value) {
+   return is_nil(value) || (is_bool(value) && !value.as.boolean);
 }
 
 /* */

@@ -18,7 +18,7 @@ typedef struct {
 }Local;
 
 typedef struct {
- Local locals[OPTION_STACK_MAX];
+ Local locals[OPTION_LOCAL_MAX];
  int32_t count;
  int32_t depth;
 }LocalStack;

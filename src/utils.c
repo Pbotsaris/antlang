@@ -2,10 +2,12 @@
 #include <stdio.h>
 
 static int32_t unpack_int32(uint8_t *bytes, int32_t num_bytes);
+static uint16_t unpack_uint16(uint8_t *bytes);
 
 
 Utils ant_utils = {
-    .unpack_int32 = unpack_int32
+    .unpack_int32 = unpack_int32,
+    .unpack_uint16 = unpack_uint16,
 };
 
 
@@ -23,10 +25,6 @@ static int32_t unpack_int32(uint8_t *bytes, int32_t num_bytes){
    }
 
     int32_t result = 0;
-
-     num_bytes--;
-     result = bytes[num_bytes]; // highest byte first then we shift...
-
      for(int i = num_bytes; i >= 0; i--){
          result = (result << 8) | bytes[i];
      }
@@ -34,3 +32,10 @@ static int32_t unpack_int32(uint8_t *bytes, int32_t num_bytes){
 
      return result;
 }
+
+
+static uint16_t unpack_uint16(uint8_t *bytes){
+return(uint16_t)(bytes[0]<<8 | bytes[1]);
+}
+
+// let i = 0; while( i < 4) { print i; i = i + 1;}

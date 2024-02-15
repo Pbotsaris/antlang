@@ -13,6 +13,7 @@ typedef struct AntUtils {
    * @return the converted 32 bit integer
    */
   int32_t (*unpack_int32)(uint8_t *, int32_t);
+  uint16_t (*unpack_uint16)(uint8_t *);
 } Utils;
 
 extern Utils ant_utils;

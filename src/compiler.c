@@ -57,28 +57,31 @@ const AntCompilerAPI ant_compiler = {
     .free = free_compiler,
 };
 
-/* Parsing */
+/** Parsing **/
 static void declaration(Compiler *compiler);
 static void variable_declaration(Compiler *compiler);
+/* statements */
 static void statement(Compiler *compiler);
+static void while_statement(Compiler *compiler);
+static void for_statement(Compiler *compiler);
 static void print_statement(Compiler *compiler);
-static void block(Compiler *compiler);
+static void if_statement(Compiler *compiler);
 static void expression_statement(Compiler *compiler);
+static void block(Compiler *compiler);
+/* expression */
 static void expression(Compiler *compiler);
-
+/* rules */
 static void number(Compiler *compiler, bool can_assign);
 static void grouping(Compiler *compiler, bool can_assign);
-;
 static void unary(Compiler *compiler, bool can_assign);
 static void binary(Compiler *compiler, bool can_assign);
 static void variable(Compiler *compiler, bool can_assign);
 static void literal(Compiler *compiler, bool can_assign);
 static void string(Compiler *compiler, bool can_assign);
-
-/* Parser Rules */
+static void and_operator(Compiler *compiler, bool can_assign);
+static void or_operator(Compiler *compiler, bool can_assign);
 
 typedef void (*ParserFunc)(Compiler *, bool can_assign);
-;
 
 /*  ParseRule: a row in the rules table
  *
@@ -119,7 +122,7 @@ ParseRule rules[] = {
     [TOKEN_IDENTIFIER] = {variable, NULL, PREC_NONE},
     [TOKEN_STRING] = {string, NULL, PREC_NONE},
     [TOKEN_NUMBER] = {number, NULL, PREC_NONE},
-    [TOKEN_AND] = {NULL, NULL, PREC_NONE},
+    [TOKEN_AND] = {NULL, and_operator, PREC_AND},
     [TOKEN_CLASS] = {NULL, NULL, PREC_NONE},
     [TOKEN_ELSE] = {NULL, NULL, PREC_NONE},
     [TOKEN_FALSE] = {literal, NULL, PREC_NONE},
@@ -127,7 +130,7 @@ ParseRule rules[] = {
     [TOKEN_FN] = {NULL, NULL, PREC_NONE},
     [TOKEN_IF] = {NULL, NULL, PREC_NONE},
     [TOKEN_NIL] = {literal, NULL, PREC_NONE},
-    [TOKEN_OR] = {NULL, NULL, PREC_NONE},
+    [TOKEN_OR] = {NULL, or_operator, PREC_OR},
     [TOKEN_PRINT] = {NULL, NULL, PREC_NONE},
     [TOKEN_RETURN] = {NULL, NULL, PREC_NONE},
     [TOKEN_SUPER] = {NULL, NULL, PREC_NONE},
@@ -158,10 +161,13 @@ static void next_token(Compiler *compiler);
 static void consume(Compiler *compiler, TokenType type, const char *message);
 static void end_of_compilation(Compiler *compiler);
 static void synchronize(Compiler *compiler);
+static void patch_jump(Compiler *compiler, int32_t offset);
 
 /* Emitting Opcodes and values */
 static void emit_constant(Compiler *compiler, Value value);
 static void emit_variable(Compiler *compiler, int32_t index, Callback callback);
+static int32_t emit_jump(Compiler *compiler, uint8_t instruction);
+static void emit_loop(Compiler *compiler, int32_t loop_start);
 static void emit_byte(Compiler *compiler, uint8_t byte);
 static void emit_two_bytes(Compiler *compiler, uint8_t byte1, uint8_t byte2);
 
@@ -278,11 +284,19 @@ static void statement(Compiler *compiler) {
   if (match(compiler, TOKEN_PRINT)) {
     print_statement(compiler);
 
-  } else if (match(compiler, TOKEN_LEFT_BRACE)) {
+   } else if (match(compiler, TOKEN_WHILE)){
+      while_statement(compiler);
 
+   } else if(match(compiler, TOKEN_FOR)){
+      for_statement(compiler);
+
+  } else if (match(compiler, TOKEN_LEFT_BRACE)) {
     begin_scope(compiler);
     block(compiler);
     end_scope(compiler);
+
+  } else if (match(compiler, TOKEN_IF)){
+     if_statement(compiler);
 
   } else {
     expression_statement(compiler);
@@ -303,6 +317,106 @@ static void block(Compiler *compiler) {
   consume(compiler, TOKEN_RIGHT_BRACE, "Expected '}' after block.");
 }
 
+/*  <While Statement (condition)> <--|
+ *   |--OP_JUMP_IF_FALSE             |
+ *   |  OP_POP                       |
+ *   |  <Body statement>             |
+ *   |  OP_LOOP                  ----|
+ *   |-> jump here
+ *
+ *      OP_POP
+ *      continues...
+ *
+ * */
+
+static void while_statement(Compiler *compiler){
+   int32_t loop_start = compiler->current_chunk->count;
+
+   consume(compiler, TOKEN_LEFT_PAREN, "Expected '(' after 'while'.");
+   expression(compiler); // conditionals
+   consume(compiler, TOKEN_RIGHT_PAREN, "Expected ')' after while condition.");
+
+   int32_t exit_jump = emit_jump(compiler, OP_JUMP_IF_FALSE); // jump end of loop if condition is false
+   emit_byte(compiler, OP_POP); // otherwise we pop the stack and continue with next interation
+   statement(compiler); // body
+   emit_loop(compiler, loop_start);
+
+   patch_jump(compiler, exit_jump);
+   emit_byte(compiler, OP_POP);
+}
+
+/*  note that we need to run the body before we increment
+ *  so we must do some jumping acrobatics
+ *
+ *       <init clause>
+ *        loop_start      <------|
+ *       <condition expression>  |
+ *      |- OP_JUMP_IF_FALSE      |
+ *      |  OP_POP                |
+ *  | --|--OP_JUMP               |
+ *  |   |  increment_start <-----|---|
+ *  |   | <increment expression> |   |   
+ *  |   |  OP_POP                |   |
+ *  |   |  OP_LOOP          -----|   |
+ *  |---|--> here..                  |
+ *      | <body statement>           |
+ *      |                            |
+ *      |  OP_LOOP         ----------|
+ *      |--> exit jump...           
+ *         OP_POP
+ *      continues...
+ *
+ *
+ *
+ * */
+static void for_statement(Compiler *compiler){
+   begin_scope(compiler); //for variables are scoped to the loop
+   consume(compiler, TOKEN_LEFT_PAREN, "Expected '(' after 'for'.");
+
+    if (match(compiler, TOKEN_LET)){
+      variable_declaration(compiler);
+
+   } else if (!match(compiler, TOKEN_SEMICOLON)) {
+      expression_statement(compiler); // expression statement to consume ; and pop value from stack for us
+   }
+   
+   int32_t loop_start = compiler->current_chunk->count;
+   int32_t exit_jump = -1;
+
+   if(!match(compiler, TOKEN_SEMICOLON)){
+      expression(compiler);
+      consume(compiler, TOKEN_SEMICOLON, "Expected ';' after loop conditions");
+   }
+
+   exit_jump = emit_jump(compiler, OP_JUMP_IF_FALSE);
+   emit_byte(compiler, OP_POP);
+
+
+   // if there's an increment expression
+   if(!match(compiler, TOKEN_RIGHT_PAREN)){
+      int32_t body_jump       = emit_jump(compiler, OP_JUMP);
+      int32_t increment_start = compiler->current_chunk->count;
+
+      expression(compiler);
+      emit_byte(compiler, OP_POP);
+      consume(compiler, TOKEN_RIGHT_PAREN, "Expected ')' after for loop condition");
+
+      emit_loop(compiler, loop_start);
+      loop_start = increment_start;
+      patch_jump(compiler, body_jump);
+   }
+
+   statement(compiler); 
+   emit_loop(compiler, loop_start);
+
+   if(exit_jump != -1){
+      patch_jump(compiler, exit_jump);
+      emit_byte(compiler, OP_POP);
+   }
+
+   end_scope(compiler); 
+}
+
 /**/
 
 static void print_statement(Compiler *compiler) {
@@ -318,6 +432,60 @@ static void print_statement(Compiler *compiler) {
 
   TRACE_PARSER_EXIT();
 }
+
+/*
+ *   <Conditional Expression>
+ *
+ *  |-OP_JUMP_IF_FALSE
+ *  |
+ *  |    OP_POP
+ *  |    <Then Branch Statement>
+ *  | |- OP_JUMP
+ *  | |
+ *  |--> jump here
+ *    |  OP_POP
+ *    |  <Else Branch Statement>
+ *    |
+ *    |-> continues...
+ *  
+ * */
+
+static void if_statement(Compiler *compiler){
+ TRACE_PARSER_ENTER("Compiler *compiler = %p", compiler);
+ TRACE_PARSER_TOKEN(compiler->parser.prev, compiler->parser.current);
+
+ consume(compiler, TOKEN_LEFT_PAREN, "Expected '(' after 'if'.");
+ expression(compiler);
+ consume(compiler, TOKEN_RIGHT_PAREN, "Expected ')' after condition.");
+
+ // this is the point where we from if the condition is false..
+ int32_t then_jump = emit_jump(compiler, OP_JUMP_IF_FALSE);
+
+ // if the condition true then...
+ emit_byte(compiler, OP_POP); 
+ statement(compiler); 
+
+ // this is the point where we either jump or not the else statement
+ int32_t else_jump = emit_jump(compiler, OP_JUMP);
+
+ // if else then...
+ patch_jump(compiler, then_jump);
+ // this pop is executed if we jump the then statement, otherwise it's ignored
+ emit_byte(compiler, OP_POP); 
+
+ // if there's an else, compile the statement within
+ if(match(compiler, TOKEN_ELSE)){
+    statement(compiler);
+ }
+
+ // note that if we don't compile an else statement
+ // then the jump will be patched to only skip the
+ // last pop instruction
+ patch_jump(compiler, else_jump);
+ TRACE_PARSER_EXIT();
+}
+
+/**/
 
 static void expression_statement(Compiler *compiler) {
   TRACE_PARSER_ENTER("Compiler *compiler = %p", compiler);
@@ -523,6 +691,53 @@ void string(Compiler *compiler, bool _) {
   emit_constant(compiler, value);
 }
 
+/*
+ *   <left operand experession>
+ *  |--OP_JUMP_IF_FALSE // if left operand is false, jump to the end
+ *  |  OP_POP
+ *  |
+ *  |<right operand expression>
+ *  |-> continues...
+ * */
+
+void and_operator(Compiler *compiler, bool _) {
+   TRACE_PARSER_ENTER("Compiler *compiler = %p", compiler);
+   TRACE_PARSER_TOKEN(compiler->parser.prev, compiler->parser.current);
+
+   int32_t end_jump = emit_jump(compiler, OP_JUMP_IF_FALSE); // this is always the point where we jump from
+
+   // if we don't jump, then...
+   emit_byte(compiler, OP_POP);
+   // compile the right operand
+   parse_pressedence(compiler, PREC_AND);
+
+   patch_jump(compiler, end_jump);
+   TRACE_PARSER_EXIT();
+}
+
+/* 
+ *    <left operand expression>
+ *    |---OP_JUMP_IF_FALSE //
+ *  |-|---OP_JUMP
+ *  | |-> here..
+ *  |     OP_POP
+ *  |  <right operand expression>
+ *  |-> continues...
+ * */
+
+void or_operator(Compiler *compiler, bool _) {
+   // if left side operand is false, we skip the next jump
+   int else_jump = emit_jump(compiler, OP_JUMP_IF_FALSE);
+   // if left side operand is true, skip right side operand
+   int end_jump  = emit_jump(compiler, OP_JUMP);
+
+   patch_jump(compiler, else_jump);
+   emit_byte(compiler, OP_POP);
+
+   parse_pressedence(compiler, PREC_OR);
+   patch_jump(compiler, end_jump);
+}
+
 /* Variables */
 
 static void define_global_variable(Compiler *compiler, int32_t global_index) {
@@ -725,6 +940,21 @@ static void synchronize(Compiler *compiler) {
 
 /**/
 
+static void patch_jump(Compiler *compiler, int32_t offset){
+
+   //  calculate the jump distance.
+   //  Not that this is not the absolute position we are jumping to
+   //  but the offset of the current position
+   int32_t jump = compiler->current_chunk->count - offset - CONST_16BITS;
+   bool valid   = ant_chunk.patch_16bits(compiler->current_chunk, offset, jump);
+
+   if(!valid){
+      error(&compiler->parser, "Too much code to jump over.");
+   }
+}
+
+/**/
+
 static void emit_constant(Compiler *compiler, Value value) {
   int32_t line = compiler->parser.prev.line;
   bool valid = ant_chunk.write_constant(compiler->current_chunk, value, line);
@@ -745,6 +975,32 @@ static void emit_variable(Compiler *compiler, int32_t index, Callback write_vari
     error(&compiler->parser, "Too many global variables in one chunk.");
   }
 }
+
+/**/
+
+static int32_t emit_jump(Compiler *compiler, uint8_t instruction) {
+   emit_byte(compiler, instruction);
+   /* the nulls re just placeholder for our later 16 bit operand that will patch */
+   emit_byte(compiler, 0xff);
+   emit_byte(compiler, 0xff);
+   return compiler->current_chunk->count - CONST_16BITS;
+}
+
+/**/
+
+static void emit_loop(Compiler *compiler, int32_t loop_start) {
+   emit_byte(compiler, OP_LOOP);
+
+   // jump the OP_LOOP operands, this is why + CONST_16BITS
+   int32_t offset = compiler->current_chunk->count - loop_start + CONST_16BITS;
+
+   if(offset > CONST_MAX_16BITS_VALUE){
+      error(&compiler->parser, "Loop body too large.");
+   }
+
+   emit_two_bytes(compiler, (offset >> 8) & 0xff, offset & 0xff);
+}
+
 
 /**/
 

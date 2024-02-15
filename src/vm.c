@@ -41,6 +41,7 @@ static Value peek_stack(VM *vm, int32_t distance);
 
 /* OP Helpeers */
 static int32_t read_24bit_operand(VM *vm);
+static uint16_t read_16bit_operand(VM *vm);
 static bool is_numeric_binary_op(VM *vm);
 static bool is_string_binary_op(VM *vm);
 
@@ -152,6 +153,29 @@ static InterpretResult run(VM *vm) {
 
       switch ((instruction = READ_CHUNK_BYTE())) {
 
+      case OP_JUMP: {
+        uint16_t offset = read_16bit_operand(vm);
+        vm->ip += offset;
+        break;
+      }
+
+      // flow control purposefully on top
+      case OP_JUMP_IF_FALSE: {
+           uint16_t offset = read_16bit_operand(vm);
+
+           if (ant_value.is_falsey_bool(peek_stack(vm, 0))){
+              vm->ip += offset;
+           }
+
+           break;
+         }
+
+      case OP_LOOP: {
+         uint16_t offset = read_16bit_operand(vm);
+         vm->ip -= offset;
+         break;
+      }
+
       case OP_RETURN:
         return INTERPRET_OK;
 
@@ -236,7 +260,7 @@ static InterpretResult run(VM *vm) {
         break;
       }
 
-        /* OP_POP discards the top value from the stack */
+     /* OP_POP discards the top value from the stack */
       case OP_POP: {
         pop_stack(vm);
         break;
@@ -372,10 +396,14 @@ static void push_stack(VM *vm, Value value) {
 /**/
 
 static int32_t read_24bit_operand(VM *vm) {
-  uint8_t *bytes = vm->ip;
-  int32_t index = ant_utils.unpack_int32(bytes, CONST_24BITS);
   vm->ip += CONST_24BITS;
-  return index;
+  return (vm->ip[-3] << 16) | (vm->ip[-2] << 8) | (vm->ip[-1]);
+}
+
+/**/
+static uint16_t read_16bit_operand(VM *vm) {
+   vm->ip += CONST_16BITS;
+   return (uint16_t)(vm->ip[-2]<<8 | vm->ip[-1]);
 }
 
 /**/

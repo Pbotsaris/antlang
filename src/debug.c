@@ -11,8 +11,7 @@
 
 static void disassemble_chunk(Compiler *compiler, const char *name);
 static int disassemble_instruction(Compiler *compiler, int offset);
-static void trace_parsing(const char *func_name, int32_t depth,
-                          const char *format, ...);
+static void trace_parsing(const char *func_name, int32_t depth, const char *format, ...);
 static void trace_tokens(Token prev, Token current, int32_t depth);
 static void trace_token(Token token, const char *name, int32_t depth);
 
@@ -25,6 +24,7 @@ DebugAPI ant_debug = {
 
 /* helpers */
 static int32_t print_instruction(const char *name, int32_t offset);
+static int32_t print_jump_instruction(const char *name, Compiler *compiler, int32_t sign, int32_t offset);
 static int32_t print_constant_instruction(const char *name, Chunk *chunk, int32_t offset);
 static int32_t print_global_instruction(const char *name, Compiler *compiler, int offset);
 static int32_t print_local_instruction(const char *name, Compiler *compiler, int offset);
@@ -148,6 +148,16 @@ static int32_t disassemble_instruction(Compiler *compiler, int offset) {
   case OP_POP:
     return print_instruction("OP_POP", offset);
 
+  case OP_JUMP_IF_FALSE:
+    return print_jump_instruction("OP_JUMP_IF_FALSE", compiler, 1, offset);
+
+  case OP_JUMP:
+    return print_jump_instruction("OP_JUMP", compiler, 1, offset);
+
+  case OP_LOOP:
+    // loops jump backwards, so negative sign
+    return print_jump_instruction("OP_LOOP", compiler, -1, offset);
+
   case OP_DEFINE_GLOBAL:
     return print_global_instruction("OP_DEFINE_GLOBAL", compiler, offset);
 
@@ -193,6 +203,14 @@ static int32_t disassemble_instruction(Compiler *compiler, int offset) {
 static int32_t print_instruction(const char *name, int offset) {
   printf("%-*s ", 10, name);
   return offset + 1;
+}
+
+static int32_t print_jump_instruction(const char *name, Compiler *compiler, int32_t sign, int32_t offset) {
+   uint8_t *operand_bytes = compiler->current_chunk->code + offset + 1;
+   uint16_t jump_offset = ant_utils.unpack_uint16(operand_bytes);
+
+  printf("%-16s %4d -> %d", name, offset, (offset * sign) + jump_offset);
+  return offset + 1 + 2;
 }
 
 static int32_t print_global_instruction(const char *name, Compiler *compiler, int offset) {

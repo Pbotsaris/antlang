@@ -14,6 +14,8 @@ typedef struct {
 /* Foward declarations */
 static void init_chunk(Chunk *chunk);
 static void write_chunk(Chunk *chunk, uint8_t byte, int32_t line);
+static bool patch_chunk_16(Chunk *chunk, int32_t offset, int32_t value);
+
 static void free_chunk(Chunk *chunk);
 static int32_t add_constant(Chunk *chunk, Value value);
 static bool write_constant(Chunk *chunk, Value value, int32_t line);
@@ -21,14 +23,14 @@ static bool write_constant(Chunk *chunk, Value value, int32_t line);
 static bool write_define_global(Chunk *chunk, int32_t global_index, int32_t line);
 static bool write_get_global(Chunk *chunk, int32_t global_index, int32_t line);
 static bool write_set_global(Chunk *chunk, int32_t global_index, int32_t line);
-
 static bool write_set_local(Chunk *chunk, int32_t local_index, int32_t line);
 static bool write_get_local(Chunk *chunk, int32_t local_index, int32_t line);
 
 /* API */
 AntChunkAPI ant_chunk = {
-    .init = init_chunk,
     .write = write_chunk,
+    .init = init_chunk,
+    .patch_16bits = patch_chunk_16,
     .free = free_chunk,
     .add_constant = add_constant,
     .write_constant = write_constant,
@@ -79,6 +81,24 @@ static void free_chunk(Chunk *chunk) {
   ant_line.free(&chunk->lines);
   ant_value_array.free(&chunk->constants);
   init_chunk(chunk);
+}
+
+/* */
+
+static bool patch_chunk_16(Chunk *chunk, int32_t offset, int32_t value){
+
+   if(offset + 2 > chunk->count){
+      return false;
+   }
+
+   if(value > CONST_MAX_16BITS_VALUE){
+       return false;
+   }
+
+   chunk->code[offset] = (value >> 8) & 0xFF;
+   chunk->code[offset + 1] = value & 0xFF;
+
+   return true;
 }
 
 /* */

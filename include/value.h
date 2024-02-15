@@ -54,8 +54,9 @@ typedef struct AntValue {
   bool   (*is_object)    (Value value);     
 
   Value  (*is_falsey)    (Value value);      
-  Value  (*equals)      (Value a, Value b);   
-  void   (*print)       (Value value);         
+  bool  (*is_falsey_bool)(Value value);      
+  Value  (*equals)       (Value a, Value b);   
+  void   (*print)        (Value value);         
 } ValueAPI;
 
 extern ValueAPI ant_value;

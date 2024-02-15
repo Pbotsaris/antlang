@@ -21,17 +21,20 @@ typedef enum {
   OP_LESS,               /* no operand */
   OP_PRINT,              /* no operand */
   OP_POP,                /* no operand */
-  OP_DEFINE_GLOBAL,      /* 8-bit operand */
+  OP_JUMP,               /* 16-bit operand */
+  OP_JUMP_IF_FALSE,      /* 16-bit operand */
+  OP_LOOP,               /* 16-bit operand */
+  OP_DEFINE_GLOBAL,      /* 8-bit operand  */
   OP_DEFINE_GLOBAL_LONG, /* 24-bit operand */
-  OP_GET_GLOBAL,         /* 8-bit operand */
+  OP_GET_GLOBAL,         /* 8-bit operand  */
   OP_GET_GLOBAL_LONG,    /* 24-bit operand */
-  OP_SET_GLOBAL,         /* 8-bit operand */
+  OP_SET_GLOBAL,         /* 8-bit operand  */
   OP_SET_GLOBAL_LONG,    /* 24-bit operand */
-  OP_SET_LOCAL,          /* 8-bit operand */
+  OP_SET_LOCAL,          /* 8-bit operand  */
   OP_SET_LOCAL_LONG,     /* 24-bit operand */
-  OP_GET_LOCAL,          /* 8-bit operand */
+  OP_GET_LOCAL,          /* 8-bit operand  */
   OP_GET_LOCAL_LONG,     /* 24-bit operand */
-  OP_CONSTANT,           /* 8-bit operand */
+  OP_CONSTANT,           /* 8-bit operand  */
   OP_CONSTANT_LONG,      /* 24-bit operand */
 } OpCode;
 
@@ -65,6 +68,7 @@ typedef struct AntChunk {
    * @details This function will automatically resize the internal array of instructions if the capacity is exceeded.
    */
   void (*write)(Chunk *chunk, uint8_t byte, int32_t line);
+  bool (*patch_16bits)(Chunk *chunk, int32_t offset, int32_t value);
 
   /**
    * @brief free a byte to the chunk
