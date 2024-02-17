@@ -10,7 +10,7 @@ static ObjectType get_type(Value value);
 static bool is_string(Value value);
 
 static bool is_object_type(Value value, ObjectType type);
-static void print_object(Value value);
+static void print_object(Value value, bool debug);
 
 static Object *allocate_object(size_t size, ObjectType object_type);
 static void free_object(Object *object);
@@ -48,10 +48,10 @@ static Object *allocate_object(size_t size, ObjectType object_type) {
 
 /* */
 
-static void print_object(Value value) {
+static void print_object(Value value, bool debug) {
   switch (get_type(value)) {
   case OBJ_STRING:
-    ant_string.print(ant_string.from_value(value));
+    ant_string.print(ant_string.from_value(value), debug);
     break;
 
   default:
@@ -59,7 +59,7 @@ static void print_object(Value value) {
   }
 }
 
-// FIX: Strings leave in a hash table now
+// FIX: Strings live in a hash table now
 static void free_object(Object *object) {
   switch (object->type) {
   case OBJ_STRING: {

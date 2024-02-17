@@ -81,7 +81,7 @@ static int32_t resolve_local(LocalStack *stack, Token *name){
 }
 
 static void mark_initialized(LocalStack *stack){
-   stack->locals[stack->count - 1].depth = stack->depth;
+   stack->locals[stack->count - 1].depth = stack->depth - 1;
 }
 
 

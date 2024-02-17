@@ -2,7 +2,7 @@
 #include "object.h"
 #include <stdio.h>
 
-static void print_value(Value value);
+static void print_value(Value value, bool debug);
 
 static Value value_from_bool(bool value);
 static Value value_from_number(double value);
@@ -155,7 +155,7 @@ static Value equals(Value a, Value b) {
 
 /* */
 
-static void print_value(Value value) {
+static void print_value(Value value, bool debug) {
   switch (value.type) {
   case VAL_BOOL:
     printf("%s", value.as.boolean ? "true" : "false");
@@ -170,8 +170,7 @@ static void print_value(Value value) {
     printf("Undefined");
     break;
   case VAL_OBJECT:
-    printf("Object");
-    ant_object.print(value);
+    ant_object.print(value, debug);
     break;
   }
 }

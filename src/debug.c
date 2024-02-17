@@ -208,9 +208,10 @@ static int32_t print_instruction(const char *name, int offset) {
 static int32_t print_jump_instruction(const char *name, Compiler *compiler, int32_t sign, int32_t offset) {
    uint8_t *operand_bytes = compiler->current_chunk->code + offset + 1;
    uint16_t jump_offset = ant_utils.unpack_uint16(operand_bytes);
+   int32_t nb_jump_bytes = 3;
 
-  printf("%-16s %4d -> %d", name, offset, (offset * sign) + jump_offset);
-  return offset + 1 + 2;
+  printf("%-16s %4d -> %d", name, offset, (offset + nb_jump_bytes) + (jump_offset * sign));
+  return offset + nb_jump_bytes;
 }
 
 static int32_t print_global_instruction(const char *name, Compiler *compiler, int offset) {
@@ -222,7 +223,7 @@ static int32_t print_global_instruction(const char *name, Compiler *compiler, in
   ObjectString *global_name = ant_mapping.find_name(&compiler->globals, global_index);
 
   printf("Global");
-  ant_string.print(global_name);
+  ant_string.print(global_name, true);
   return offset;
 }
 
@@ -247,7 +248,7 @@ static int print_constant_instruction(const char *name, Chunk *chunk, int offset
     return offset;
   }
 
-  ant_value.print(chunk->constants.values[const_index]);
+  ant_value.print(chunk->constants.values[const_index], true);
 
   return offset;
 }
