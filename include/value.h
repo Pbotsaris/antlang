@@ -16,6 +16,7 @@ typedef enum {
 
 typedef struct Object Object;
 typedef struct ObjectString ObjectString;
+typedef struct ObjectFunction ObjectFunction;
 
 /**
  * Represents a value in the Ant language.

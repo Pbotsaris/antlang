@@ -62,11 +62,7 @@ static int32_t resolve_local(LocalStack *stack, Token *name){
    /* most inner scope is at the top of the stack */
    for(int32_t i = stack->count - 1; i >= 0; i--){
       Local *local  = &stack->locals[i];
-
-      if(!name){
-         printf("-----> Name is NULL\n");
-      }
-
+     
       if(token_compare(&local->name, name)){
 
          if(local->depth == LOCALS_UNINITIALIZED){

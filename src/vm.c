@@ -116,7 +116,7 @@ static void free_vm(VM *vm) {
   ant_memory.free_objects();
   ant_string.free_all();
   ant_value_array.free(&vm->globals);
-  free(vm);
+  FREE(VM, vm);
 }
 
 static InterpretResult run(VM *vm) {
