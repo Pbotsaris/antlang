@@ -5,8 +5,8 @@
 #include "value.h"
 
 typedef enum {
-  OBJ_STRING,
-  OBJ_FUNCTION,
+  OBJ_STRING = 0,
+  OBJ_FUNCTION = 1,
 } ObjectType;
 
 struct Object {

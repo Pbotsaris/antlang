@@ -7,13 +7,14 @@
 #include "memory.h"
 #include "object.h"
 #include "strings.h"
-#include "utils.h"
 #include "value_array.h"
+#include "functions.h"
 
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
 
 /* Public */
 static VM *new_vm();
@@ -57,41 +58,36 @@ static VM *new_vm() {
 
   reset_stack(vm);
 
-  vm->chunk = NULL;
-  vm->ip = NULL;
-
-  ant_compiler.init(&vm->compiler);
+  ant_compiler.init(&vm->compiler, COMPILATION_TYPE_SCRIPT);
   ant_value_array.init_undefined(&vm->globals);
+  vm->frame_count = 0;
 
   return vm;
 }
 
 static InterpretResult interpret(VM *vm, const char *source) {
+  ObjectFunction *func = ant_compiler.compile(&vm->compiler, source);
 
-  Chunk chunk;
-  ant_chunk.init(&chunk);
-
-  bool valid = ant_compiler.compile(&vm->compiler, source, &chunk);
-
-  if (!valid) {
-    ant_chunk.free(&chunk);
+  if (func == NULL) {
     return INTERPRET_COMPILE_ERROR;
   }
 
-  vm->chunk = &chunk;
-  vm->ip = vm->chunk->code;
+  // add current call frame function, which is type COMPILATION_TYPE_SCRIPT to slot 0 in the stack
+  // note that in locals.c:init_local_stack, we claim the slot 0 for the VM
+  push_stack(vm, ant_value.from_object(ant_function.as_object(func)));
 
-  InterpretResult result = run(vm);
-
-  ant_chunk.free(&chunk);
-  return result;
+  // init frame ip to first instruction and slots (stack window) to the bottom of the stack
+  CallFrame frame = {.func = func, .ip = func->chunk.code, .slots = vm->stack};
+  vm->frames[vm->frame_count++] = frame;
+  
+  return run(vm);
 }
 
 static void repl(VM *vm) {
   char line[OPTION_LINE_MAX];
 
   while (true) {
-    printf("> ");
+    printf("ant> ");
 
     if (!fgets(line, OPTION_LINE_MAX, stdin)) {
       printf("\n");
@@ -114,16 +110,23 @@ static void repl(VM *vm) {
 static void free_vm(VM *vm) {
   ant_compiler.free(&vm->compiler);
   ant_memory.free_objects();
-  ant_string.free_all();
+
+  /* note that this only clears the strings hash table
+   * the actual strings are managed by the garbage collector
+   * */
+  ant_string.free_table();
   ant_value_array.free(&vm->globals);
   FREE(VM, vm);
 }
 
 static InterpretResult run(VM *vm) {
-#define READ_CHUNK_BYTE() (*vm->ip++)
-#define READ_CHUNK_CONSTANT() (vm->chunk->constants.values[READ_CHUNK_BYTE()])
+
+   CallFrame *frame = vm->frames + vm->frame_count -1;
+
+#define READ_CHUNK_BYTE() (*frame->ip++)
+#define READ_CHUNK_CONSTANT() (frame->func->chunk.constants.values[READ_CHUNK_BYTE()])
 #define READ_CHUNK_LONG_CONSTANT()                                             \
-  (vm->chunk->constants.values[read_24bit_operand(vm)])
+  (frame>func->chunk.constants.values[read_24bit_operand(vm)])
 
 #define BINARY_OP(value_type, op)                                              \
   do {                                                                         \
@@ -141,21 +144,20 @@ static InterpretResult run(VM *vm) {
 #endif
 
   for (;;) {
+
 #ifdef DEBUG_TRACE_EXECUTION
     print_stack(vm);
-
     /* address to index, get the relative offset */
-    int32_t offset = (int32_t)(vm->ip - vm->chunk->code);
-    ant_debug.disassemble_instruction(&vm->compiler, offset);
+    int32_t offset = (int32_t)(frame->ip - frame->func->chunk.code);
+    ant_debug.disassemble_instruction(&vm->compiler, &frame->func->chunk, offset);
 #endif
 
     uint8_t instruction;
-
     switch ((instruction = READ_CHUNK_BYTE())) {
 
     case OP_JUMP: {
       uint16_t offset = read_16bit_operand(vm);
-      vm->ip += offset;
+      frame->ip += offset;
       break;
     }
 
@@ -164,7 +166,7 @@ static InterpretResult run(VM *vm) {
       uint16_t offset = read_16bit_operand(vm);
 
       if (ant_value.is_falsey_bool(peek_stack(vm, 0))) {
-        vm->ip += offset;
+        frame->ip += offset;
       }
 
       break;
@@ -172,11 +174,13 @@ static InterpretResult run(VM *vm) {
 
     case OP_LOOP: {
       uint16_t offset = read_16bit_operand(vm);
-      vm->ip -= offset;
+      frame->ip -= offset;
       break;
     }
 
     case OP_RETURN:
+      // FIX: adding a pop here to remove function from stack but needs to be looked at
+      pop_stack(vm);
       return INTERPRET_OK;
 
     case OP_NEGATE: {
@@ -274,8 +278,8 @@ static InterpretResult run(VM *vm) {
         return INTERPRET_RUNTIME_ERROR;
       }
 
-      push_stack(
-          vm, vm->stack[index]); // move local variable to the top of the stack
+      // using frame->slots to access relative to the current frame
+      push_stack( vm, frame->slots[index]);
       break;
     }
 
@@ -286,7 +290,7 @@ static InterpretResult run(VM *vm) {
         runtime_error(vm, "OP_GET_LOCAL_LONG: Stack overflow at index %d", index);
         return INTERPRET_RUNTIME_ERROR;
       }
-      push_stack(vm, vm->stack[index]);
+      push_stack(vm, frame->slots[index]);
       break;
     }
 
@@ -297,7 +301,8 @@ static InterpretResult run(VM *vm) {
         runtime_error(vm, "OP_SET_LOCAL: Stack overflow at index %d", index);
         return INTERPRET_RUNTIME_ERROR;
       }
-      vm->stack[index] = peek_stack(vm, 0);
+      // using frame->slots to set relative to the current frame
+      frame->slots[index] = peek_stack(vm, 0);
       break;
     }
 
@@ -309,7 +314,7 @@ static InterpretResult run(VM *vm) {
         return INTERPRET_RUNTIME_ERROR;
       }
 
-      vm->stack[index] = peek_stack(vm, 0);
+      frame->slots[index] = peek_stack(vm, 0);
       break;
     }
 
@@ -419,14 +424,17 @@ static void push_stack(VM *vm, Value value) {
 /**/
 
 static int32_t read_24bit_operand(VM *vm) {
-  vm->ip += CONST_24BITS;
-  return (vm->ip[-3] << 16) | (vm->ip[-2] << 8) | (vm->ip[-1]);
+  CallFrame *frame = vm->frames + vm->frame_count -1;
+  frame->ip += CONST_24BITS;
+  return (frame->ip[-3] << 16) | (frame->ip[-2] << 8) | (frame->ip[-1]);
 }
 
 /**/
 static uint16_t read_16bit_operand(VM *vm) {
-  vm->ip += CONST_16BITS;
-  return (uint16_t)(vm->ip[-2] << 8 | vm->ip[-1]);
+   CallFrame *frame = vm->frames + vm->frame_count -1;
+
+  frame->ip += CONST_16BITS;
+  return (uint16_t)(frame->ip[-2] << 8 | frame->ip[-1]);
 }
 
 /**/
@@ -438,9 +446,11 @@ static void runtime_error(VM *vm, const char *format, ...) {
   va_end(args);
   fputs("\n", stderr);
 
+  CallFrame *frame = vm->frames + vm->frame_count -1;
+
   /* -1 because interpreter is one step ahead */
-  size_t instruction = vm->ip - vm->chunk->code - 1;
-  int32_t line = ant_line.get(&vm->chunk->lines, instruction);
+  size_t instruction = frame->ip - frame->func->chunk.code - 1;
+  int32_t line       = ant_line.get(&frame->func->chunk.lines, instruction);
 
   fprintf(stderr, "[line %d] in script\n", line);
   reset_stack(vm);

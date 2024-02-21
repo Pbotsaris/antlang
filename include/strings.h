@@ -18,7 +18,7 @@ struct ObjectString {
 
 typedef struct {
    ObjectString*  (*make)             (const char *chars, int32_t length);
-   void           (*free_all)         (void);
+   void           (*free_table)         (void);
    ObjectString*  (*from_value)       (Value value);
    ObjectString*  (*concat)           (Value a, Value b);
    char*          (*as_cstring)       (ObjectString* string);

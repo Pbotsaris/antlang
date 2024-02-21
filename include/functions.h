@@ -16,6 +16,7 @@ struct ObjectFunction {
 typedef struct {
    ObjectFunction* (*new)(void);
    ObjectFunction* (*from_value)(Value value);
+   Object*         (*as_object)(ObjectFunction* function);
    void            (*print)(ObjectFunction* function, bool debug);
 }ObjectFunctionAPI;
 

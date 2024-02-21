@@ -12,13 +12,21 @@ typedef enum {
 }InterpretResult;
 
 
+typedef struct {
+   ObjectFunction* func;  /* function being called */
+   Value*          slots; /* first slot of the call frame */
+   uint8_t*        ip;    /* return address */
+}CallFrame;
+
 typedef struct VM{
-   Chunk*      chunk;               
-   uint8_t*    ip;                   
+  // Chunk*      chunk;               
+  // uint8_t*    ip;                   
    Value       stack[OPTION_STACK_MAX]; //TODO: make this dynamic
    Value*      stack_top;            
    Compiler    compiler;            
    ValueArray  globals;
+   CallFrame   frames[OPTION_FRAMES_MAX];
+   int32_t     frame_count;
 }VM;
 
 typedef struct VM_API{

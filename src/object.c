@@ -10,7 +10,6 @@
 static ObjectType get_type(Value value);
 static bool is_string(Value value);
 static bool is_function(Value value);
-static ObjectFunction* as_function(Value value);
 
 static bool is_object_type(Value value, ObjectType type);
 static void print_object(Value value, bool debug);
@@ -73,20 +72,22 @@ static void print_object(Value value, bool debug) {
 }
 
 static void free_object(Object *object) {
-
   switch (object->type) {
   case OBJ_STRING: {
-   // do nothing, strings live in a hash table
+   ObjectString* string = (ObjectString*)object;
+   FREE_ARRAY(char, string->chars, string->length + 1);
+   FREE(ObjectString, string);
    break;
   }
    case OBJ_FUNCTION:{
     ObjectFunction* func = (ObjectFunction*)object;
     ant_chunk.free(&func->chunk);
     FREE(ObjectFunction, func);
+    break;
   }
 
    default:
-   fprintf(stderr, "Error: Attempted to free object of unkown type.\n");
+   fprintf(stderr, "Error: Attempted to free object of unkown type: %d\n", object->type);
     break; 
   }
 }

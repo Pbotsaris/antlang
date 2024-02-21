@@ -1,0 +1,4 @@
+fn myFirstFunction(){
+}
+
+print myFirstFunction;

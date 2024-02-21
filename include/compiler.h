@@ -1,12 +1,11 @@
 #ifndef ANT_COMPILER_H
 #define ANT_COMPILER_H
 #include "chunk.h"
-#include "common.h"
 #include "scanner.h"
 #include "var_mapping.h"
 #include "parser.h"
-#include "config.h"
 #include "locals.h"
+#include "functions.h"
 
 typedef enum {
   PREC_NONE       = 0,  /* Lowest precedence */
@@ -22,18 +21,27 @@ typedef enum {
   PREC_PRIMARY   = 10, /*       Highest     */
 } Presedence;
 
+typedef enum {
+   COMPILATION_TYPE_FUNC,
+   COMPILATION_TYPE_SCRIPT,
+}CompilationType;;
 
-typedef struct {
+
+
+typedef struct Compiler {
   Scanner scanner;
   Parser parser;
-  Chunk *current_chunk;
+ // Chunk *current_chunk;
   VarMapping globals;
   LocalStack locals;
+  ObjectFunction *function;
+  CompilationType type;
+
 } Compiler;
 
 typedef struct AntCompiler {
-  void (*init)(Compiler *compiler);;
-  bool (*compile)(Compiler *compiler, const char *source, Chunk *chunk);
+  void (*init)(Compiler *compiler, CompilationType type);
+  ObjectFunction* (*compile)(Compiler *compiler, const char *source);
   void (*free)(Compiler *compiler);
 } AntCompilerAPI;
 

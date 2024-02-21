@@ -10,11 +10,11 @@ static char *as_cstring(ObjectString *string);
 static void print_string(ObjectString *string, bool debug);
 ;
 static Object *as_object(ObjectString *string);
-static void free_strings(void);
+static void free_strings_table(void);
 
 StringAPI ant_string = {
     .make = make_string,
-    .free_all = free_strings,
+    .free_table = free_strings_table,
     .as_cstring = as_cstring,
     .concat = concat_string,
     .from_value = to_obj_string,
@@ -30,7 +30,9 @@ static ObjectString *allocate_string(char *chars, int32_t length,
 ;
 static uint32_t hash_string(const char *key, int32_t length);
 
-void free_strings(void) { ant_table.free(&strings); }
+void free_strings_table(void) { 
+   ant_table.free(&strings); 
+}
 
 /* */
 
@@ -87,6 +89,8 @@ static ObjectString *make_string(const char *chars, int32_t length) {
   return allocate_string(heap_chars, length, hash);
 }
 
+/* */
+
 void print_string(ObjectString *string, bool debug) {
   if (debug) {
     printf("string {'%s'}", as_cstring(string));
@@ -102,8 +106,7 @@ Object *as_object(ObjectString *string) { return (Object *)string; }
 
 /* */
 
-static ObjectString *allocate_string(char *chars, int32_t length,
-                                     uint32_t hash) {
+static ObjectString *allocate_string(char *chars, int32_t length, uint32_t hash) {
   ObjectString *str =
       (ObjectString *)ant_object.allocate(sizeof(ObjectString), OBJ_STRING);
 

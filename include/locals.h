@@ -12,6 +12,12 @@
 
 typedef void(*ClearCallback)(OpCode);
 
+typedef enum {
+   SCOPE_GLOBAL = 0,
+   SCOPE_LOCAL = 1,
+   SCOPE_INVALID = 2,
+} ScopeType;
+
 typedef struct {
    Token name;
    int32_t depth; // how deep in the stack the variable is
@@ -28,6 +34,7 @@ typedef struct {
    void        (*init)             (LocalStack* stack);
    void        (*push)             (LocalStack* stack, Token name);
    bool        (*validate_scope)   (LocalStack* stack, Token *name);
+   ScopeType   (*current_scope)    (LocalStack* stack);
    void        (*mark_initialized) (LocalStack* stack);
    void        (*clear_scope)      (LocalStack* stack, ClearCallback callback);
    int32_t     (*resolve)          (LocalStack* stack, Token *name);

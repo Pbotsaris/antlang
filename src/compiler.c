@@ -5,6 +5,7 @@
 #include "config.h"
 #include "object.h"
 #include "strings.h"
+#include "functions.h"
 
 #if defined(DEBUG_PRINT_CODE) || defined(DEBUG_TRACE_PARSER)
 #include "debug.h"
@@ -47,8 +48,8 @@ static int32_t trace_depth = 0;
 typedef bool (*Callback)(Chunk *chunk, int32_t const_index, int32_t line);
 
 /* Public */
-static void init_compiler(Compiler *compiler);
-static bool compile(Compiler *compiler, const char *source, Chunk *chunk);
+static void init_compiler(Compiler *compiler, CompilationType type);
+static ObjectFunction *compile(Compiler *compiler, const char *source);
 static void free_compiler(Compiler *compiler);
 
 const AntCompilerAPI ant_compiler = {
@@ -57,9 +58,11 @@ const AntCompilerAPI ant_compiler = {
     .free = free_compiler,
 };
 
-/** Parsing **/
+/** declarations **/
 static void declaration(Compiler *compiler);
+static void function_declaration(Compiler *compiler);
 static void variable_declaration(Compiler *compiler);
+
 /* statements */
 static void statement(Compiler *compiler);
 static void while_statement(Compiler *compiler);
@@ -68,8 +71,14 @@ static void print_statement(Compiler *compiler);
 static void if_statement(Compiler *compiler);
 static void expression_statement(Compiler *compiler);
 static void block(Compiler *compiler);
+
 /* expression */
 static void expression(Compiler *compiler);
+
+/* functions */
+static void compile_function(Compiler *parent_compiler, CompilationType type);
+static void function_params(Compiler *compiler);
+
 /* rules */
 static void number(Compiler *compiler, bool can_assign);
 static void grouping(Compiler *compiler, bool can_assign);
@@ -159,7 +168,7 @@ static void end_scope(Compiler *compiler);
 /* Compiling steps */
 static void next_token(Compiler *compiler);
 static void consume(Compiler *compiler, TokenType type, const char *message);
-static void end_of_compilation(Compiler *compiler);
+static ObjectFunction *end_of_compilation(Compiler *compiler);
 static void synchronize(Compiler *compiler);
 static void patch_jump(Compiler *compiler, int32_t offset);
 
@@ -177,6 +186,7 @@ static void error(Parser *parser, const char *message);
 static void error_at_current(Parser *parser, const char *message);
 
 /* utils */
+static Chunk *current_chunk(Compiler *compiler);
 static const char *precedence_name(Presedence presedence);
 static bool match(Compiler *compiler, TokenType type);
 static bool check(Compiler *compiler, TokenType type);
@@ -184,15 +194,15 @@ static ParseRule *get_rule(TokenType type);
 static bool is_global(int32_t local_index);
 
 /* Compiler API */
-static void init_compiler(Compiler *compiler) {
+static void init_compiler(Compiler *compiler, CompilationType type) {
+  compiler->function = NULL;
+  compiler->type = type;
 
   /* scanner gets initialize on compile method */
   ant_parser.init(&compiler->parser);
   ant_mapping.init(&compiler->globals);
   ant_locals.init(&compiler->locals);
-
-  /* current_chunk gets populate in compile method */
-  compiler->current_chunk = NULL;
+  compiler->function = ant_function.new();
 }
 
 /**/
@@ -204,10 +214,8 @@ static void free_compiler(Compiler *compiler) {
 
 /**/
 
-static bool compile(Compiler *compiler, const char *source, Chunk *chunk) {
+static ObjectFunction *compile(Compiler *compiler, const char *source) {
   ant_scanner.init(&compiler->scanner, source);
-
-  compiler->current_chunk = chunk;
   ant_parser.reset(&compiler->parser);
 
 #ifdef DEBUG_TRACE_PARSER
@@ -220,8 +228,8 @@ static bool compile(Compiler *compiler, const char *source, Chunk *chunk) {
     declaration(compiler);
   }
 
-  end_of_compilation(compiler);
-  return !compiler->parser.was_error;
+  ObjectFunction *func = end_of_compilation(compiler);
+  return compiler->parser.was_error ? NULL : func;
 }
 
 /**/
@@ -230,7 +238,10 @@ static void declaration(Compiler *compiler) {
   TRACE_PARSER_ENTER("Compiler *compiler = %p", compiler);
   TRACE_PARSER_TOKEN(compiler->parser.prev, compiler->parser.current);
 
-  if (match(compiler, TOKEN_LET)) {
+  if (match(compiler, TOKEN_FN)) {
+    function_declaration(compiler);
+
+  } else if (match(compiler, TOKEN_LET)) {
     variable_declaration(compiler);
 
   } else {
@@ -242,6 +253,31 @@ static void declaration(Compiler *compiler) {
   }
 
   TRACE_PARSER_EXIT();
+}
+
+/*
+ * Function declarations will work just like variable declarations.
+ * When on top level, they will be global variables.
+ * within a scope, they will be local variables.
+ * */
+
+static void function_declaration(Compiler *compiler) {
+  uint8_t global_index = parse_variable(compiler, "Expected function name.");
+
+  ScopeType scope = ant_locals.current_scope(&compiler->locals);
+
+  // for function declarations, we can define locals before the body.
+  // this is useful to allow for recursive calls
+  if (scope == SCOPE_LOCAL) {
+    define_local_variable(compiler);
+  }
+  compile_function(compiler, COMPILATION_TYPE_FUNC);
+
+  if (scope == SCOPE_GLOBAL) {
+    define_global_variable(compiler, global_index);
+  } else {
+    error(&compiler->parser, "Invalid scope for function declaration.");
+  }
 }
 
 /**/
@@ -261,16 +297,22 @@ static void variable_declaration(Compiler *compiler) {
     emit_byte(compiler, OP_NIL);
   }
 
-  consume(compiler, TOKEN_SEMICOLON, "Expected ';' after variable declaration.");
+  consume(compiler, TOKEN_SEMICOLON,
+          "Expected ';' after variable declaration.");
 
-  if (compiler->locals.depth > 0) {
+  ScopeType scope = ant_locals.current_scope(&compiler->locals);
+
+  if (scope == SCOPE_LOCAL) {
     define_local_variable(compiler);
     TRACE_PARSER_EXIT();
     return;
   }
 
-  // actually emits instruction to define a global variable
-  define_global_variable(compiler, globals_index);
+  if (scope == SCOPE_GLOBAL) {
+    define_global_variable(compiler, globals_index); // emmits instruction
+  } else {
+    error(&compiler->parser, "Invalid scope for variable declaration.");
+  }
   TRACE_PARSER_EXIT();
 }
 
@@ -335,7 +377,7 @@ static void while_statement(Compiler *compiler) {
   TRACE_PARSER_ENTER("Compiler *compiler = %p", compiler);
   TRACE_PARSER_TOKEN(compiler->parser.prev, compiler->parser.current);
 
-  int32_t loop_start = compiler->current_chunk->count;
+  int32_t loop_start = current_chunk(compiler)->count;
 
   consume(compiler, TOKEN_LEFT_PAREN, "Expected '(' after 'while'.");
   expression(compiler); // conditionals
@@ -394,7 +436,7 @@ static void for_statement(Compiler *compiler) {
                                     // value from stack for us
   }
 
-  int32_t loop_start = compiler->current_chunk->count;
+  int32_t loop_start = current_chunk(compiler)->count;
   int32_t exit_jump = -1;
 
   // conditional expression
@@ -408,11 +450,12 @@ static void for_statement(Compiler *compiler) {
 
   // increment expression, if any
   if (!match(compiler, TOKEN_RIGHT_PAREN)) {
-    int32_t body_jump       = emit_jump(compiler, OP_JUMP);
-    int32_t increment_start = compiler->current_chunk->count;
+    int32_t body_jump = emit_jump(compiler, OP_JUMP);
+    int32_t increment_start = current_chunk(compiler)->count;
     expression(compiler);
     emit_byte(compiler, OP_POP);
-    consume(compiler, TOKEN_RIGHT_PAREN, "Expected ')' after for loop condition");
+    consume(compiler, TOKEN_RIGHT_PAREN,
+            "Expected ')' after for loop condition");
 
     emit_loop(compiler, loop_start);
     loop_start = increment_start;
@@ -521,7 +564,66 @@ static void expression(Compiler *compiler) {
   TRACE_PARSER_EXIT();
 }
 
-/**/
+/* NOTE: YOu just added this. 
+ * Questions are: 
+ *       How to handle global variables and mappings. are variables within functions always local? I'd say yes
+ *       We must have a way to resolve global variables only for COMPILATION_TYPE_SCRIPT
+ *
+ *  Also, double check the way you are passing the parser to the function compiler
+ *  and how nested functions will be handled
+ *  Just noticed that we must pass the scanner accross the compilers
+ *  You stopped in a stack of compilers.
+ * */
+
+static void compile_function(Compiler *parent_compiler, CompilationType type){
+
+  Compiler func_compiler;
+  init_compiler(&func_compiler, type);
+  // the function compiler will move the parse and scanner along during function compilation
+  func_compiler.parser = parent_compiler->parser;
+  func_compiler.scanner = parent_compiler->scanner;
+
+  // we just parsed the function name, let's grab it as metadata
+  Parser *parser = &parent_compiler->parser;
+  func_compiler.function->name = ant_string.make(parser->prev.start, parser->prev.length);
+
+  begin_scope(&func_compiler);
+  consume(&func_compiler, TOKEN_LEFT_PAREN, "Expected '(' after function name.");
+  function_params(&func_compiler);
+  consume(&func_compiler, TOKEN_RIGHT_PAREN, "Expected ')' after function parameters.");
+  consume(&func_compiler, TOKEN_LEFT_BRACE, "Expected '{' before function body.");
+  block(&func_compiler);
+
+  ObjectFunction *func = end_of_compilation(&func_compiler);
+  emit_constant(parent_compiler, ant_value.from_object(ant_function.as_object(func)));
+
+  // func compiler returns the parser and scanner to the parent compiler
+  parent_compiler->parser  = func_compiler.parser;
+  parent_compiler->scanner = func_compiler.scanner;
+  TRACE_PARSER_EXIT();
+}
+
+
+/* */
+
+static void function_params(Compiler *compiler){
+   if(!check(compiler, TOKEN_RIGHT_PAREN)){
+      do {
+         compiler->function->arity++;
+         if(compiler->function->arity > OPTION_MAX_NUM_PARAMS){
+            char *message = NULL;
+            sprintf(message, "Cannot have more than %d parameters.", OPTION_MAX_NUM_PARAMS);;
+            error_at_current(&compiler->parser, message);
+         }
+
+         parse_variable(compiler, "Expected parameter name.");
+         define_local_variable(compiler);
+      } while(match(compiler, TOKEN_COMMA));
+   }
+}
+
+
+/* */
 
 static void parse_pressedence(Compiler *compiler, Presedence presedence) {
   TRACE_PARSER_ENTER("Compiler *compiler = %p, Presedence presedence = %s",
@@ -776,7 +878,9 @@ static void declare_local_variable(Compiler *compiler) {
   TRACE_PARSER_ENTER("Compiler *compiler = %p", compiler);
   TRACE_PARSER_TOKEN(compiler->parser.prev, compiler->parser.current);
 
-  if (compiler->locals.depth == 0) {
+  ScopeType scope = ant_locals.current_scope(&compiler->locals);
+
+  if (scope != SCOPE_LOCAL) {
     TRACE_PARSER_EXIT();
     return;
   }
@@ -841,14 +945,17 @@ static int32_t parse_variable(Compiler *compiler, const char *message) {
   consume(compiler, TOKEN_IDENTIFIER, message);
 
   // if we are in a block, we are parsing a local variable
-
   declare_local_variable(compiler); // does not emit any instruction
-  if (compiler->locals.depth > 0) {
+
+  ScopeType scope = ant_locals.current_scope(&compiler->locals);
+
+  if (scope == SCOPE_LOCAL) {
     TRACE_PARSER_EXIT();
     return -1; // dummy value
   }
 
-  int32_t globals_index = make_global_identifier(compiler, &compiler->parser.prev);
+  int32_t globals_index =
+      make_global_identifier(compiler, &compiler->parser.prev);
   TRACE_PARSER_EXIT();
   return globals_index;
 }
@@ -880,7 +987,8 @@ static void end_scope(Compiler *compiler) {
 
   // clean up locals that are no longer in scope
   // when we reach current stack->depth, we stop
-  while (stack->count > 0 && stack->locals[stack->count - 1].depth == stack->depth) {
+  while (stack->count > 0 &&
+         stack->locals[stack->count - 1].depth == stack->depth) {
     emit_byte(compiler, OP_POP);
     stack->count--;
   }
@@ -917,12 +1025,17 @@ static void consume(Compiler *compiler, TokenType type, const char *message) {
 
 /**/
 
-static void end_of_compilation(Compiler *compiler) {
+ObjectFunction *end_of_compilation(Compiler *compiler) {
   emit_byte(compiler, OP_RETURN);
 
+  ObjectFunction *func = compiler->function;
+
 #ifdef DEBUG_PRINT_CODE
-  ant_debug.disassemble_chunk(compiler, "code");
+  ant_debug.disassemble_chunk(compiler, func->name != NULL ? func->name->chars
+                                                           : "<script>");
 #endif
+
+  return func;
 }
 
 /**/
@@ -962,8 +1075,8 @@ static void patch_jump(Compiler *compiler, int32_t offset) {
   //  calculate the jump distance.
   //  Not that this is not the absolute position we are jumping to
   //  but the offset of the current position
-  int32_t jump = compiler->current_chunk->count - offset - CONST_16BITS;
-  bool valid = ant_chunk.patch_16bits(compiler->current_chunk, offset, jump);
+  int32_t jump = current_chunk(compiler)->count - offset - CONST_16BITS;
+  bool valid = ant_chunk.patch_16bits(current_chunk(compiler), offset, jump);
 
   if (!valid) {
     error(&compiler->parser, "Too much code to jump over.");
@@ -974,7 +1087,7 @@ static void patch_jump(Compiler *compiler, int32_t offset) {
 
 static void emit_constant(Compiler *compiler, Value value) {
   int32_t line = compiler->parser.prev.line;
-  bool valid = ant_chunk.write_constant(compiler->current_chunk, value, line);
+  bool valid = ant_chunk.write_constant(current_chunk(compiler), value, line);
 
   if (!valid) {
     error(&compiler->parser, "Too many constants in one chunk.");
@@ -983,10 +1096,11 @@ static void emit_constant(Compiler *compiler, Value value) {
 
 /**/
 
-static void emit_variable(Compiler *compiler, int32_t index, Callback write_variable) {
+static void emit_variable(Compiler *compiler, int32_t index,
+                          Callback write_variable) {
 
   int32_t line = compiler->parser.prev.line;
-  bool valid = write_variable(compiler->current_chunk, index, line);
+  bool valid = write_variable(current_chunk(compiler), index, line);
 
   if (!valid) {
     error(&compiler->parser, "Too many global variables in one chunk.");
@@ -1001,7 +1115,7 @@ static int32_t emit_jump(Compiler *compiler, uint8_t instruction) {
    */
   emit_byte(compiler, 0xff);
   emit_byte(compiler, 0xff);
-  return compiler->current_chunk->count - CONST_16BITS;
+  return current_chunk(compiler)->count - CONST_16BITS;
 }
 
 /**/
@@ -1010,7 +1124,7 @@ static void emit_loop(Compiler *compiler, int32_t loop_start) {
   emit_byte(compiler, OP_LOOP);
 
   // jump the OP_LOOP operands, this is why + CONST_16BITS
-  int32_t offset = compiler->current_chunk->count - loop_start + CONST_16BITS;
+  int32_t offset = current_chunk(compiler)->count - loop_start + CONST_16BITS;
 
   if (offset > CONST_MAX_16BITS_VALUE) {
     error(&compiler->parser, "Loop body too large.");
@@ -1023,15 +1137,15 @@ static void emit_loop(Compiler *compiler, int32_t loop_start) {
 
 static void emit_byte(Compiler *compiler, uint8_t byte) {
   int32_t line = compiler->parser.prev.line;
-  ant_chunk.write(compiler->current_chunk, byte, line);
+  ant_chunk.write(current_chunk(compiler), byte, line);
 }
 
 /**/
 
 static void emit_two_bytes(Compiler *compiler, uint8_t byte1, uint8_t byte2) {
   int32_t line = compiler->parser.prev.line;
-  ant_chunk.write(compiler->current_chunk, byte1, line);
-  ant_chunk.write(compiler->current_chunk, byte2, line);
+  ant_chunk.write(current_chunk(compiler), byte1, line);
+  ant_chunk.write(current_chunk(compiler), byte2, line);
 }
 
 /* */
@@ -1049,11 +1163,11 @@ static void error_at_current(Parser *parser, const char *message) {
 /**/
 
 static void error_at(Parser *parser, const char *message) {
-
   Token token = parser->current;
 
   if (parser->panic_mode)
     return; // suppress errors after the first one
+            //
   parser->panic_mode = true;
 
   fprintf(stderr, "[line %d] Error", token.line);
@@ -1072,6 +1186,10 @@ static void error_at(Parser *parser, const char *message) {
 
   fprintf(stderr, ": %s\n", message);
   parser->was_error = true;
+}
+/**/
+static Chunk *current_chunk(Compiler *compiler) {
+  return &compiler->function->chunk;
 }
 
 /**/

@@ -7,6 +7,7 @@
 
 static void init_local_stack(LocalStack *stack);
 static void push_local_stack(LocalStack *stack, Token name);
+static ScopeType current_scope(LocalStack *stack);
 static bool validate_scope(LocalStack *stack, Token *name);
 static void mark_initialized(LocalStack *stack);
 static int32_t resolve_local(LocalStack *stack, Token *name);
@@ -15,6 +16,7 @@ static void print_local_name(LocalStack *stack, int32_t index);
 const LocalStackAPI ant_locals = {
    .init = init_local_stack,
    .push = push_local_stack,
+   .current_scope = current_scope,
    .validate_scope = validate_scope,
    .mark_initialized = mark_initialized,
    .resolve = resolve_local,
@@ -26,7 +28,13 @@ static bool token_compare(Token *a, Token *b);
 
 /* Implementation */
 static void init_local_stack(LocalStack *stack) {
-   stack->count = 0;
+   // Claim the stack slot 0 for the VM internal use
+   Local *local = &stack->locals[0];
+   local->name.start  = "";
+   local->name.length = 0;
+   local->depth = 0;
+
+   stack->count = 1;
    stack->depth = 0;
 }
 
@@ -37,6 +45,19 @@ static void push_local_stack(LocalStack *stack, Token name){
    local->depth = LOCALS_UNINITIALIZED; 
 
    stack->count++;
+}
+
+static ScopeType current_scope(LocalStack *stack){
+
+   if(stack->depth == 0){
+      return SCOPE_GLOBAL;
+   }
+
+   if(stack->depth > 0){
+      return SCOPE_LOCAL;
+   }
+
+   return SCOPE_INVALID;
 }
 
 static bool validate_scope(LocalStack *stack, Token *name){
