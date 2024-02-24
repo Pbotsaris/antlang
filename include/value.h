@@ -38,26 +38,26 @@ typedef struct {
  * types and for inspecting the type and content of existing Values.
  */
 typedef struct AntValue {
-  Value  (*from_bool)     (bool value);  
-  Value  (*from_number)   ( double value);
-  Value  (*from_object)   (Object *object);
-  Value  (*make_nil)      (void);       
-  Value  (*make_undefined)(void);
+  Value   (*from_bool)     (bool value);  
+  Value   (*from_number)   ( double value);
+  Value   (*from_object)   (Object *object);
+  Value   (*make_nil)      (void);       
+  Value   (*make_undefined)(void);
 
-  double (*as_number)     (Value value); 
-  bool   (*as_bool)       (Value value); 
-  Object*(*as_object)     (Value value);
+  double  (*as_number)     (Value value); 
+  bool    (*as_bool)       (Value value); 
+  Object* (*as_object)     (Value value);
 
-  bool   (*is_bool)      (Value value);  
-  bool   (*is_nil)       (Value value);   
-  bool   (*is_undefined) (Value value);
-  bool   (*is_number)    (Value value);    
-  bool   (*is_object)    (Value value);     
+  bool    (*is_bool)      (Value value);  
+  bool    (*is_nil)       (Value value);   
+  bool    (*is_undefined) (Value value);
+  bool    (*is_number)    (Value value);    
+  bool    (*is_object)    (Value value);     
 
-  Value  (*is_falsey)    (Value value);      
-  bool  (*is_falsey_bool)(Value value);      
-  Value  (*equals)       (Value a, Value b);   
-  void   (*print)        (Value value, bool debug);         
+  Value   (*is_falsey)    (Value value);      
+  bool    (*is_falsey_bool)(Value value);      
+  Value   (*equals)       (Value a, Value b);   
+  int32_t (*print)        (Value value, bool debug);         
 } ValueAPI;
 
 extern ValueAPI ant_value;

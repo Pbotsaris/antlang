@@ -32,6 +32,7 @@ static int32_t print_local_instruction(const char *name, Compiler *compiler, Chu
 
 static int32_t unpack_bitecode_operand(Chunk *chunk, int *offset);
 static bool is_long_constant(uint8_t opcode);
+static void align_print(int32_t instruction_depth);
 
 /* Implementations */
 static void disassemble_chunk(Compiler *compiler, Chunk *frame_chunk, const char *name) {
@@ -205,7 +206,8 @@ static int32_t disassemble_instruction(Compiler *compiler, Chunk *frame_chunk, i
 /* */
 
 static int32_t print_instruction(const char *name, int offset) {
-  printf("%-*s ", 10, name);
+  int32_t print_len = printf("%-*s ", 10, name);
+  align_print(print_len);
   return offset + 1;
 }
 
@@ -213,7 +215,8 @@ static int32_t print_instruction(const char *name, int offset) {
 
 static int32_t print_byte_instruction(const char *name, Chunk *frame_chunk, int32_t offset){
    uint8_t *operand_byte = frame_chunk->code + offset + 1;
-   printf("%-16s %4d", name, *operand_byte);
+   int32_t print_len = printf("%-16s %4d", name, *operand_byte);
+   align_print(print_len);
 
    return offset + 2;
 }
@@ -225,7 +228,9 @@ static int32_t print_jump_instruction(const char *name, Chunk *frame_chunk, int3
    uint16_t jump_offset = ant_utils.unpack_uint16(operand_bytes);
    int32_t nb_jump_bytes = 3;
 
-  printf("%-16s %4d -> %d", name, offset, (offset + nb_jump_bytes) + (jump_offset * sign));
+  int32_t print_len = printf("%-16s %4d -> %d", name, offset, (offset + nb_jump_bytes) + (jump_offset * sign));
+  align_print(print_len);
+
   return offset + nb_jump_bytes;
 }
 
@@ -235,11 +240,14 @@ static int32_t print_global_instruction(const char *name, Compiler *compiler, Ch
 
   int32_t global_index = unpack_bitecode_operand(frame_chunk, &offset);
 
-  printf("%-16s %4d:", name, global_index);
+  int32_t print_len = printf("%-16s %4d:", name, global_index);
   ObjectString *global_name = ant_mapping.find_name(&compiler->globals, global_index);
 
-  printf("Global");
-  ant_string.print(global_name, true);
+  print_len += printf("Global {");
+  print_len += ant_string.print(global_name, true);
+  print_len += printf("}");
+
+  align_print(print_len);
   return offset;
 }
 
@@ -249,9 +257,10 @@ static int32_t print_local_instruction(const char *name, Compiler *compiler, Chu
 
   int32_t local_index = unpack_bitecode_operand(frame_chunk, &offset);
 
-  printf("%-16s %4d:", name, local_index);
-  ant_locals.print(&compiler->locals, local_index);
+  int32_t print_len = printf("%-16s %4d:", name, local_index);
+  print_len += ant_locals.print(&compiler->locals, local_index);
 
+  align_print(print_len);
   return offset;
 }
 
@@ -260,14 +269,16 @@ static int32_t print_local_instruction(const char *name, Compiler *compiler, Chu
 static int print_constant_instruction(const char *name, Chunk *frame_chunk, int offset) {
   int32_t const_index = unpack_bitecode_operand(frame_chunk, &offset);
 
-  printf("%-16s %4d:", name, const_index);
+  int32_t print_len = printf("%-16s %4d:", name, const_index);
 
   if (const_index >= frame_chunk->constants.count) {
-    printf("Unknown constant index '%d'\n", const_index);
+    print_len += printf("Unknown constant index '%d'\n", const_index);
+    align_print(print_len);
     return offset;
   }
 
-  ant_value.print(frame_chunk->constants.values[const_index], true);
+  print_len += ant_value.print(frame_chunk->constants.values[const_index], true);
+  align_print(print_len);
 
   return offset;
 }
@@ -299,4 +310,12 @@ static bool is_long_constant(uint8_t opcode) {
   return opcode == OP_CONSTANT_LONG || opcode == OP_DEFINE_GLOBAL_LONG ||
          opcode == OP_GET_GLOBAL_LONG || opcode == OP_SET_GLOBAL_LONG ||
          opcode == OP_GET_LOCAL_LONG || opcode == OP_SET_LOCAL_LONG;
+}
+
+
+static void align_print(int32_t instruction_depth) {
+   int32_t padding = OPTION_DISASSEMBLE_COLUMN_WITDH - instruction_depth;
+  for (int32_t i = 0; i < padding; i++) {
+    putchar(' ');
+  }
 }

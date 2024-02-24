@@ -1,0 +1,7 @@
+fn surname(name){
+   let new = name + " botsaris";
+   return new;
+}
+
+let result = surname("pedro");
+print result;

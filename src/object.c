@@ -12,7 +12,7 @@ static bool is_string(Value value);
 static bool is_function(Value value);
 
 static bool is_object_type(Value value, ObjectType type);
-static void print_object(Value value, bool debug);
+static int32_t print_object(Value value, bool debug);
 
 static Object *allocate_object(size_t size, ObjectType object_type);
 static void free_object(Object *object);
@@ -55,20 +55,23 @@ static Object *allocate_object(size_t size, ObjectType object_type) {
 
 /* */
 
-static void print_object(Value value, bool debug) {
+static int32_t print_object(Value value, bool debug) {
 
   switch (get_type(value)) {
   case OBJ_STRING:
-    ant_string.print(ant_string.from_value(value), debug);
+    return ant_string.print(ant_string.from_value(value), debug);
     break;
    case OBJ_FUNCTION:
-    ant_function.print(ant_function.from_value(value), debug);
+    return ant_function.print(ant_function.from_value(value), debug);
     break;
 
   default:
     fprintf(stderr, "Error: Attempted to print object of unkown type.\n");
+    return 0;
     break; // Unreachable
   }
+
+
 }
 
 static void free_object(Object *object) {

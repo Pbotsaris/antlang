@@ -38,7 +38,7 @@ typedef struct {
    void        (*mark_initialized) (LocalStack* stack);
    void        (*clear_scope)      (LocalStack* stack, ClearCallback callback);
    int32_t     (*resolve)          (LocalStack* stack, Token *name);
-   void        (*print)            (LocalStack* stack, int32_t index);
+   int32_t        (*print)            (LocalStack* stack, int32_t index);
 }LocalStackAPI;
 
 const extern LocalStackAPI ant_locals;

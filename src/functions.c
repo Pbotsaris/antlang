@@ -2,7 +2,7 @@
 #include <stdio.h>
 
 static ObjectFunction* new_function(void);
-static void            print_function(ObjectFunction* function, bool debug);;
+static int32_t         print_function(ObjectFunction* function, bool debug);;
 static Object*         function_as_object(ObjectFunction* function);
 static ObjectFunction* function_from_value(Value value);
 
@@ -22,12 +22,11 @@ static ObjectFunction *new_function(void){
   return func;
 }
 
-static void print_function(ObjectFunction* function, bool _){
+static int32_t print_function(ObjectFunction* function, bool _){
    if (function->name == NULL) {
-      printf("<script>");
-      return;
+      return printf("<script>");
    }
-  printf("<fn %s>", function->name->chars);
+  return printf("<fn %s>", function->name->chars);
 }
 
 static ObjectFunction* function_from_value(Value value){

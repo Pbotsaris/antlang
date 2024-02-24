@@ -4,12 +4,11 @@
 #define ANT_VERSION "0.1.0"
 
 /* Debugging */
-// #define DEBUG_PRINT_CODE
+//#define DEBUG_PRINT_CODE
 #define DEBUG_TRACE_EXECUTION
-#define DEBUG_TRACE_PARSER
-// Requires DEBUG_TRACE_PARSER
-// will trace tokens
-#define DEBUG_TRACE_PARSER_VERBOSE 
+// #define DEBUG_TRACE_PARSER
+// Requires DEBUG_TRACE_PARSER will trace tokens
+// #define DEBUG_TRACE_PARSER_VERBOSE 
 
 /* Constants */
 #define CONST_24BITS 3
@@ -29,6 +28,7 @@
 #define OPTION_ARRAY_MIN_CAPACITY 8
 #define OPTION_TABLE_LOAD_FACTOR 0.79 // Load factor for hash table
 #define OPTION_MAX_NUM_PARAMS 255
+#define OPTION_DISASSEMBLE_COLUMN_WITDH 50
 
 
 #endif // ANT_CONFIG_H

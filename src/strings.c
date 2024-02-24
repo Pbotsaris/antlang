@@ -7,7 +7,7 @@ static ObjectString *to_obj_string(Value value);
 static ObjectString *make_string(const char *chars, int length);
 static ObjectString *concat_string(Value a, Value b);
 static char *as_cstring(ObjectString *string);
-static void print_string(ObjectString *string, bool debug);
+static int32_t print_string(ObjectString *string, bool debug);
 ;
 static Object *as_object(ObjectString *string);
 static void free_strings_table(void);
@@ -91,13 +91,12 @@ static ObjectString *make_string(const char *chars, int32_t length) {
 
 /* */
 
-void print_string(ObjectString *string, bool debug) {
+int32_t print_string(ObjectString *string, bool debug) {
   if (debug) {
-    printf("string {'%s'}", as_cstring(string));
-    return;
+   return printf("'%s'", as_cstring(string));
   }
 
-  printf("%s", as_cstring(string));
+  return printf("%s", as_cstring(string));
 }
 
 /* */

@@ -196,15 +196,29 @@ static InterpretResult run(VM *vm) {
    }
 
     case OP_RETURN:{
+
          Value result = pop_stack(vm);
          vm->frame_count--;
          
       /* script main function */
        if(vm->frame_count == 0){
+        pop_stack(vm);
         return INTERPRET_OK;
        }
 
-       // set the stack top to the last frame's slots
+       /*  set the stack top to begining of the current frame stack window, 
+        *  dicarting stack slots used by function call. Then write return value at stack top.
+        *  For example, a sum function with 3 arguments
+        *
+        *  [script] [4] | [sum] [1] [2] [3] |  
+        *               |   stack window    |
+        *               ^ move stack top here
+        *
+        * then push return value
+        * [script] [4] [6] 
+        *                 ^ stack top
+        * */
+
        vm->stack_top = frame->slots;
        push_stack(vm, result);
        frame = vm->frames + (vm->frame_count - 1);

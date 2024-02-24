@@ -11,7 +11,7 @@ static ScopeType current_scope(LocalStack *stack);
 static bool validate_scope(LocalStack *stack, Token *name);
 static void mark_initialized(LocalStack *stack);
 static int32_t resolve_local(LocalStack *stack, Token *name);
-static void print_local_name(LocalStack *stack, int32_t index);
+static int32_t print_local_name(LocalStack *stack, int32_t index);
 
 const LocalStackAPI ant_locals = {
    .init = init_local_stack,
@@ -101,10 +101,16 @@ static void mark_initialized(LocalStack *stack){
    stack->locals[stack->count - 1].depth = stack->depth - 1;
 }
 
+static int32_t print_local_name(LocalStack *stack, int32_t index){
 
-static void print_local_name(LocalStack *stack, int32_t index){
    const char *name = stack->locals[index].name.start;
-   printf("Local{ %.*s }", stack->locals[index].name.length, name);
+
+   //TODO: How to handle local function variables?
+   if(name == NULL){
+      return printf("Local{ N/A }");
+   }
+
+   return printf("Local{ '%.*s' }", stack->locals[index].name.length, name);
 }
 
 

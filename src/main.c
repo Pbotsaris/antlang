@@ -29,8 +29,7 @@ static void run_file(VM *vm, const char *path) {
 
   InterpretResult result = ant_vm.interpret(vm, source);
 
-  if (result == INTERPRET_COMPILE_ERROR)
-   printf("Compile error\n");
+  if (result == INTERPRET_COMPILE_ERROR) printf("Compile error\n");
 
   free(source);
 }

@@ -22,7 +22,7 @@ typedef struct {
    ObjectString*  (*from_value)       (Value value);
    ObjectString*  (*concat)           (Value a, Value b);
    char*          (*as_cstring)       (ObjectString* string);
-   void           (*print)            (ObjectString* string, bool debug);
+   int32_t        (*print)            (ObjectString* string, bool debug);
    Object*        (*as_object)        (ObjectString* string);
 }StringAPI;
 

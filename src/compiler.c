@@ -70,6 +70,7 @@ static void while_statement(Compiler *compiler);
 static void for_statement(Compiler *compiler);
 static void print_statement(Compiler *compiler);
 static void if_statement(Compiler *compiler);
+static void return_statement(Compiler *compiler);
 static void expression_statement(Compiler *compiler);
 static void block(Compiler *compiler);
 
@@ -183,6 +184,7 @@ static void emit_constant(Compiler *compiler, Value value);
 static void emit_variable(Compiler *compiler, int32_t index, Callback callback);
 static int32_t emit_jump(Compiler *compiler, uint8_t instruction);
 static void emit_loop(Compiler *compiler, int32_t loop_start);
+static void emit_return_nil(Compiler *compiler);
 static void emit_byte(Compiler *compiler, uint8_t byte);
 static void emit_two_bytes(Compiler *compiler, uint8_t byte1, uint8_t byte2);
 
@@ -345,6 +347,9 @@ static void statement(Compiler *compiler) {
 
   } else if (match(compiler, TOKEN_IF)) {
     if_statement(compiler);
+
+   } else if (match(compiler, TOKEN_RETURN)) { 
+    return_statement(compiler);
 
   } else {
     expression_statement(compiler);
@@ -547,6 +552,25 @@ static void if_statement(Compiler *compiler) {
   // last pop instruction
   patch_jump(compiler, else_jump);
   TRACE_PARSER_EXIT();
+}
+
+/**/
+
+static void return_statement(Compiler *compiler){
+
+   if(compiler->type == COMPILATION_TYPE_SCRIPT){
+      error(&compiler->parser, "Cannot return from top-level code.");
+      return;
+   }
+
+   /* early return, like the below ;) */
+   if(match(compiler, TOKEN_SEMICOLON)){
+      emit_return_nil(compiler);
+      return; 
+   }
+   expression(compiler);
+   consume(compiler, TOKEN_SEMICOLON, "Expected ';' after return value.");
+   emit_byte(compiler, OP_RETURN);
 }
 
 /**/
@@ -1052,11 +1076,11 @@ static void consume(Compiler *compiler, TokenType type, const char *message) {
 /**/
 
 ObjectFunction *end_of_compilation(Compiler *compiler) {
-  emit_byte(compiler, OP_RETURN);
+  emit_return_nil(compiler);
   ObjectFunction *func = compiler->function;
 
 #ifdef DEBUG_PRINT_CODE
-  ant_debug.disassemble_chunk(compiler, func->name != NULL ? func->name->chars : "<script>");
+  ant_debug.disassemble_chunk(compiler, &func->chunk, func->name != NULL ? func->name->chars : "<script>");
 #endif
 
   return func;
@@ -1158,6 +1182,12 @@ static void emit_loop(Compiler *compiler, int32_t loop_start) {
 }
 
 /**/
+static void emit_return_nil(Compiler *compiler) {
+  emit_byte(compiler, OP_NIL);
+  emit_byte(compiler, OP_RETURN);
+}
+
+/**/
 
 static void emit_byte(Compiler *compiler, uint8_t byte) {
   int32_t line = compiler->parser.prev.line;
@@ -1215,7 +1245,7 @@ static void error_at(Parser *parser, const char *message) {
     fprintf(stderr, " at end\n");
     break;
   default:
-    fprintf(stderr, " at '%.*s'\n", token.length, token.start);
+    fprintf(stderr, " at '%.*s'", token.length, token.start);
     break;
   }
 

@@ -2,7 +2,6 @@
 #include "object.h"
 #include <stdio.h>
 
-static void print_value(Value value, bool debug);
 
 static Value value_from_bool(bool value);
 static Value value_from_number(double value);
@@ -14,15 +13,18 @@ static bool value_to_bool(Value value);
 static double value_to_number(Value value);
 static Object *value_to_object(Value value);
 
-static Value equals(Value a, Value b);
-static Value is_falsey(Value value);
-static bool is_falsey_bool(Value value);
-
 static bool is_bool(Value value);
 static bool is_number(Value value);
 static bool is_nil(Value value);
 static bool is_undefined(Value value);
 static bool is_object(Value value);
+
+static int32_t print_value(Value value, bool debug);
+
+static Value equals(Value a, Value b);
+static Value is_falsey(Value value);
+static bool is_falsey_bool(Value value);
+
 
 ValueAPI ant_value = {.from_bool = value_from_bool,
                       .from_number = value_from_number,
@@ -155,22 +157,24 @@ static Value equals(Value a, Value b) {
 
 /* */
 
-static void print_value(Value value, bool debug) {
+static int32_t print_value(Value value, bool debug) {
   switch (value.type) {
   case VAL_BOOL:
-    printf("%s", value.as.boolean ? "true" : "false");
+    return printf("%s", value.as.boolean ? "true" : "false");
     break;
   case VAL_NIL:
-    printf("nil");
+    return printf("nil");
     break;
   case VAL_NUMBER:
-    printf("%g", value.as.number);
+    return printf("%g", value.as.number);
     break;
   case VAL_UNDEFINED:
-    printf("Undefined");
+    return printf("Undefined");
     break;
   case VAL_OBJECT:
-    ant_object.print(value, debug);
+    return ant_object.print(value, debug);
     break;
   }
+
+  return 0;
 }

@@ -17,7 +17,7 @@ typedef struct {
    ObjectFunction* (*new)(void);
    ObjectFunction* (*from_value)(Value value);
    Object*         (*as_object)(ObjectFunction* function);
-   void            (*print)(ObjectFunction* function, bool debug);
+   int32_t         (*print)(ObjectFunction* function, bool debug);
 }ObjectFunctionAPI;
 
 const extern ObjectFunctionAPI ant_function;
