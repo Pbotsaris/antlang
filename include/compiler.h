@@ -31,7 +31,6 @@ typedef enum {
 typedef struct Compiler {
   Scanner scanner;
   Parser parser;
- // Chunk *current_chunk;
   VarMapping globals;
   LocalStack locals;
   ObjectFunction *function;

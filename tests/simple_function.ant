@@ -1,4 +1,7 @@
-fn myFirstFunction(){
+fn my_func(){
+   print "10";
 }
 
-print myFirstFunction;
+my_func();
+
+

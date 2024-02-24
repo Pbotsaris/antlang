@@ -29,6 +29,10 @@ void free_mapping(VarMapping *mapping) {
   mapping->count = -1;
 }
 
+// 0x555555566910
+//0x555555566e80 -> 0x555555566e60
+// 0x555555566910
+
 Value add_mapping(VarMapping *mapping, ObjectString *name) {
 
    if(mapping->count == -1) {
@@ -57,8 +61,8 @@ Value add_mapping(VarMapping *mapping, ObjectString *name) {
     fprintf(stderr, "Warning: Variable '%s' being overwritten in mapping.\n", name->chars);
   }
 
-  Value nameValue = ant_value.from_object(ant_string.as_object(name));
-  ant_value_array.write(&mapping->reverse_lookup, nameValue);
+  Value name_value = ant_value.from_object(ant_string.as_object(name));
+  ant_value_array.write(&mapping->reverse_lookup, name_value);
 
   mapping->count++;
   return index_value;

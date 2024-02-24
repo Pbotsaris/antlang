@@ -19,8 +19,6 @@ typedef struct {
 }CallFrame;
 
 typedef struct VM{
-  // Chunk*      chunk;               
-  // uint8_t*    ip;                   
    Value       stack[OPTION_STACK_MAX]; //TODO: make this dynamic
    Value*      stack_top;            
    Compiler    compiler;            

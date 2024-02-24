@@ -1,0 +1,10 @@
+
+fn b() {
+   print "hello";
+}
+
+fn a() {
+  b();
+}
+
+a();

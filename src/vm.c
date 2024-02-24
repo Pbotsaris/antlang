@@ -41,6 +41,10 @@ static bool stack_overflow(VM *vm, int32_t stack_index);
 static void print_stack(VM *vm);
 static Value peek_stack(VM *vm, int32_t distance);
 
+/* functions */
+static bool call_value(VM *vm, Value callee, int32_t arg_count);
+static bool call(VM* vm, ObjectFunction *func, int32_t arg_count);
+
 /* OP Helpeers */
 static int32_t read_24bit_operand(VM *vm);
 static uint16_t read_16bit_operand(VM *vm);
@@ -66,20 +70,19 @@ static VM *new_vm() {
 }
 
 static InterpretResult interpret(VM *vm, const char *source) {
-  ObjectFunction *func = ant_compiler.compile(&vm->compiler, source);
 
-  if (func == NULL) {
+  ObjectFunction *main_func = ant_compiler.compile(&vm->compiler, source);
+
+  if (main_func == NULL) {
     return INTERPRET_COMPILE_ERROR;
   }
 
-  // add current call frame function, which is type COMPILATION_TYPE_SCRIPT to slot 0 in the stack
-  // note that in locals.c:init_local_stack, we claim the slot 0 for the VM
-  push_stack(vm, ant_value.from_object(ant_function.as_object(func)));
+  /* add main func or type COMPILATION_TYPE_SCRIPT to slot 0 in the stack and calls it
+     note that in locals.c:init_local_stack, we claim the slot 0 for the VM for this purpose 
+   */
+  push_stack(vm, ant_value.from_object(ant_function.as_object(main_func)));
+  call(vm, main_func, 0);
 
-  // init frame ip to first instruction and slots (stack window) to the bottom of the stack
-  CallFrame frame = {.func = func, .ip = func->chunk.code, .slots = vm->stack};
-  vm->frames[vm->frame_count++] = frame;
-  
   return run(vm);
 }
 
@@ -121,7 +124,7 @@ static void free_vm(VM *vm) {
 
 static InterpretResult run(VM *vm) {
 
-   CallFrame *frame = vm->frames + vm->frame_count -1;
+   CallFrame *frame = vm->frames + (vm->frame_count -1);
 
 #define READ_CHUNK_BYTE() (*frame->ip++)
 #define READ_CHUNK_CONSTANT() (frame->func->chunk.constants.values[READ_CHUNK_BYTE()])
@@ -161,7 +164,7 @@ static InterpretResult run(VM *vm) {
       break;
     }
 
-    // flow control purposefully on top
+    /* flow control purposefully on top */
     case OP_JUMP_IF_FALSE: {
       uint16_t offset = read_16bit_operand(vm);
 
@@ -178,10 +181,35 @@ static InterpretResult run(VM *vm) {
       break;
     }
 
-    case OP_RETURN:
-      // FIX: adding a pop here to remove function from stack but needs to be looked at
-      pop_stack(vm);
-      return INTERPRET_OK;
+   /* NOTE: Compiler and vm are setup so that arguments and parameters line up perfectly in the stack 
+    *       so there is no need for binding the arguments to the parameters here.
+    */
+    case OP_CALL: {
+      int32_t arg_count = (int32_t)READ_CHUNK_BYTE();
+      /* note how arg_count will be the number of arguments on the stack. we grab the last one */
+      if(!call_value(vm, peek_stack(vm, arg_count), arg_count)){
+         return INTERPRET_RUNTIME_ERROR;
+      }
+      /* if call_value is successful there will be a new frame */
+      frame = vm->frames + (vm->frame_count - 1);
+      break;
+   }
+
+    case OP_RETURN:{
+         Value result = pop_stack(vm);
+         vm->frame_count--;
+         
+      /* script main function */
+       if(vm->frame_count == 0){
+        return INTERPRET_OK;
+       }
+
+       // set the stack top to the last frame's slots
+       vm->stack_top = frame->slots;
+       push_stack(vm, result);
+       frame = vm->frames + (vm->frame_count - 1);
+       break;
+    }
 
     case OP_NEGATE: {
 
@@ -423,6 +451,55 @@ static void push_stack(VM *vm, Value value) {
 
 /**/
 
+static bool call_value(VM *vm, Value callee, int32_t arg_count) {
+
+   if(ant_value.is_object(callee)){
+      switch(ant_object.type(callee)){
+         case OBJ_FUNCTION:
+            return call(vm, ant_function.from_value(callee), arg_count);
+         default:
+            break; // non-callable object
+      }
+   }
+
+   runtime_error(vm, "Can only call functions and classes");
+   return false;
+}
+
+/* */
+
+static bool call(VM *vm, ObjectFunction *func, int32_t arg_count) {
+
+   if(arg_count != func->arity){
+      runtime_error(vm, "Expected %d arguments but got %d", func->arity, arg_count);
+      return false;
+   }
+
+   if(vm->frame_count == OPTION_FRAMES_MAX){
+      runtime_error(vm, "Reached maximum call stack depth of %d", OPTION_FRAMES_MAX);
+      return false;
+   }
+
+   /* 
+    *  For a code like: 4 + sum(1, 2, 3)
+    *  The stack and frame slots would be
+    *  [script] [4] | [sum] [1] [2] [3] |
+    *               |   frame->slots    |
+    */
+
+   CallFrame *frame = vm->frames + vm->frame_count; // next frame
+   frame->func = func;
+   frame->ip = func->chunk.code;
+   // position the slots to be just below the arguments, on function call
+   // -1 is to account for stack slot 0 which is reserved for the VM/method calls.
+   frame->slots = vm->stack_top - arg_count - 1;
+   vm->frame_count++;
+
+   return true;
+}
+
+/* */
+
 static int32_t read_24bit_operand(VM *vm) {
   CallFrame *frame = vm->frames + vm->frame_count -1;
   frame->ip += CONST_24BITS;
@@ -446,13 +523,26 @@ static void runtime_error(VM *vm, const char *format, ...) {
   va_end(args);
   fputs("\n", stderr);
 
-  CallFrame *frame = vm->frames + vm->frame_count -1;
+  for(int32_t i = vm->frame_count -1; i >=0; i--){
 
-  /* -1 because interpreter is one step ahead */
-  size_t instruction = frame->ip - frame->func->chunk.code - 1;
-  int32_t line       = ant_line.get(&frame->func->chunk.lines, instruction);
+    CallFrame *frame = &vm->frames[i];
 
-  fprintf(stderr, "[line %d] in script\n", line);
+    ObjectFunction *func = frame->func;
+    /* -1 because interpreter is one step ahead when error occurs */
+    size_t instruction   = frame->ip - frame->func->chunk.code - 1;  
+    int32_t line         = ant_line.get(&frame->func->chunk.lines, instruction);
+
+    fprintf(stderr, "[line %d] in ", line);
+   
+    if(func->name == NULL){
+       fprintf(stderr, "script\n");
+
+    } else {
+       fprintf(stderr, "%s()\n", func->name->chars);
+    }
+
+  }
+
   reset_stack(vm);
 }
 

@@ -44,7 +44,6 @@ static Object* add_object(Object *object) {
    return object;
 }
 
-// FIX: Strings leave in a hash table now
 static void free_objects(){
    Object *head = garbage.objects;
 

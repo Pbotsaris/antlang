@@ -24,6 +24,7 @@ DebugAPI ant_debug = {
 
 /* helpers */
 static int32_t print_instruction(const char *name, int32_t offset);
+static int32_t print_byte_instruction(const char *name, Chunk *frame_chunk, int32_t offset);
 static int32_t print_jump_instruction(const char *name, Chunk *frame_chunk, int32_t sign, int32_t offset);
 static int32_t print_constant_instruction(const char *name, Chunk *frame_chunk, int32_t offset);
 static int32_t print_global_instruction(const char *name, Compiler *compiler, Chunk *frame_chunk, int offset);
@@ -156,6 +157,9 @@ static int32_t disassemble_instruction(Compiler *compiler, Chunk *frame_chunk, i
     // loops jump backwards, so negative sign
     return print_jump_instruction("OP_LOOP", frame_chunk, -1, offset);
 
+  case OP_CALL:
+    return print_byte_instruction("OP_CALL", frame_chunk, offset);
+
   case OP_DEFINE_GLOBAL:
     return print_global_instruction("OP_DEFINE_GLOBAL", compiler, frame_chunk, offset);
 
@@ -198,10 +202,23 @@ static int32_t disassemble_instruction(Compiler *compiler, Chunk *frame_chunk, i
   }
 }
 
+/* */
+
 static int32_t print_instruction(const char *name, int offset) {
   printf("%-*s ", 10, name);
   return offset + 1;
 }
+
+/* */
+
+static int32_t print_byte_instruction(const char *name, Chunk *frame_chunk, int32_t offset){
+   uint8_t *operand_byte = frame_chunk->code + offset + 1;
+   printf("%-16s %4d", name, *operand_byte);
+
+   return offset + 2;
+}
+
+/* */
 
 static int32_t print_jump_instruction(const char *name, Chunk *frame_chunk, int32_t sign, int32_t offset) {
    uint8_t *operand_bytes = frame_chunk->code + offset + 1;
@@ -211,6 +228,8 @@ static int32_t print_jump_instruction(const char *name, Chunk *frame_chunk, int3
   printf("%-16s %4d -> %d", name, offset, (offset + nb_jump_bytes) + (jump_offset * sign));
   return offset + nb_jump_bytes;
 }
+
+/* */
 
 static int32_t print_global_instruction(const char *name, Compiler *compiler, Chunk *frame_chunk, int offset) {
 
@@ -224,6 +243,8 @@ static int32_t print_global_instruction(const char *name, Compiler *compiler, Ch
   return offset;
 }
 
+/* */
+
 static int32_t print_local_instruction(const char *name, Compiler *compiler, Chunk *frame_chunk, int32_t offset) {
 
   int32_t local_index = unpack_bitecode_operand(frame_chunk, &offset);
@@ -233,6 +254,8 @@ static int32_t print_local_instruction(const char *name, Compiler *compiler, Chu
 
   return offset;
 }
+
+/* */
 
 static int print_constant_instruction(const char *name, Chunk *frame_chunk, int offset) {
   int32_t const_index = unpack_bitecode_operand(frame_chunk, &offset);
@@ -248,6 +271,8 @@ static int print_constant_instruction(const char *name, Chunk *frame_chunk, int 
 
   return offset;
 }
+
+/* */
 
 static int32_t unpack_bitecode_operand(Chunk *chunk, int *offset) {
   int32_t const_index = 0;
@@ -267,6 +292,8 @@ static int32_t unpack_bitecode_operand(Chunk *chunk, int *offset) {
   *offset += operand_offset;
   return const_index;
 }
+
+/* */
 
 static bool is_long_constant(uint8_t opcode) {
   return opcode == OP_CONSTANT_LONG || opcode == OP_DEFINE_GLOBAL_LONG ||

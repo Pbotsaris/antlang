@@ -3,9 +3,10 @@
 
 #include "compiler.h"
 #include "config.h"
-#include "object.h"
-#include "strings.h"
 #include "functions.h"
+#include "object.h"
+#include <stdarg.h>
+#include "strings.h"
 
 #if defined(DEBUG_PRINT_CODE) || defined(DEBUG_TRACE_PARSER)
 #include "debug.h"
@@ -85,6 +86,7 @@ static void grouping(Compiler *compiler, bool can_assign);
 static void unary(Compiler *compiler, bool can_assign);
 static void binary(Compiler *compiler, bool can_assign);
 static void variable(Compiler *compiler, bool can_assign);
+static void call(Compiler *compiler, bool can_assign);
 static void literal(Compiler *compiler, bool can_assign);
 static void string(Compiler *compiler, bool can_assign);
 static void and_operator(Compiler *compiler, bool can_assign);
@@ -108,7 +110,7 @@ typedef struct {
 
 ParseRule rules[] = {
     /* TOKEN TYPE          PREFIX     INFIX   PRESEDENCE */
-    [TOKEN_LEFT_PAREN] = {grouping, NULL, PREC_NONE},
+    [TOKEN_LEFT_PAREN] = {grouping, call, PREC_CALL},
     [TOKEN_RIGHT_PAREN] = {NULL, NULL, PREC_NONE},
     [TOKEN_LEFT_BRACE] = {NULL, NULL, PREC_NONE},
     [TOKEN_RIGHT_BRACE] = {NULL, NULL, PREC_NONE},
@@ -161,7 +163,11 @@ static void named_variable(Compiler *compiler, Token name, bool can_assign);
 static int32_t parse_variable(Compiler *compiler, const char *message);
 static int32_t make_global_identifier(Compiler *compiler, Token *token);
 
-/* Block */
+
+/* Functions */
+static uint8_t argument_list(Compiler *compiler);
+
+/* Scope */
 static void begin_scope(Compiler *compiler);
 static void end_scope(Compiler *compiler);
 
@@ -172,7 +178,7 @@ static ObjectFunction *end_of_compilation(Compiler *compiler);
 static void synchronize(Compiler *compiler);
 static void patch_jump(Compiler *compiler, int32_t offset);
 
-/* Emitting Opcodes and values */
+/* Emitting */
 static void emit_constant(Compiler *compiler, Value value);
 static void emit_variable(Compiler *compiler, int32_t index, Callback callback);
 static int32_t emit_jump(Compiler *compiler, uint8_t instruction);
@@ -183,6 +189,7 @@ static void emit_two_bytes(Compiler *compiler, uint8_t byte1, uint8_t byte2);
 /* error handling */
 static void error_at(Parser *parser, const char *message);
 static void error(Parser *parser, const char *message);
+static void errorf(Parser *parser, const char *format, ...);
 static void error_at_current(Parser *parser, const char *message);
 
 /* utils */
@@ -564,18 +571,9 @@ static void expression(Compiler *compiler) {
   TRACE_PARSER_EXIT();
 }
 
-/* NOTE: YOu just added this. 
- * Questions are: 
- *       How to handle global variables and mappings. are variables within functions always local? I'd say yes
- *       We must have a way to resolve global variables only for COMPILATION_TYPE_SCRIPT
- *
- *  Also, double check the way you are passing the parser to the function compiler
- *  and how nested functions will be handled
- *  Just noticed that we must pass the scanner accross the compilers
- *  You stopped in a stack of compilers.
- * */
-
-static void compile_function(Compiler *parent_compiler, CompilationType type){
+static void compile_function(Compiler *parent_compiler, CompilationType type) {
+  TRACE_PARSER_ENTER("Compiler *compiler = %p", parent_compiler);
+  TRACE_PARSER_TOKEN(parent_compiler->parser.prev, parent_compiler->parser.current);
 
   Compiler func_compiler;
   init_compiler(&func_compiler, type);
@@ -585,7 +583,10 @@ static void compile_function(Compiler *parent_compiler, CompilationType type){
 
   // we just parsed the function name, let's grab it as metadata
   Parser *parser = &parent_compiler->parser;
-  func_compiler.function->name = ant_string.make(parser->prev.start, parser->prev.length);
+
+  if (type != COMPILATION_TYPE_SCRIPT) {
+    func_compiler.function->name = ant_string.make(parser->prev.start, parser->prev.length);
+  }
 
   begin_scope(&func_compiler);
   consume(&func_compiler, TOKEN_LEFT_PAREN, "Expected '(' after function name.");
@@ -594,34 +595,33 @@ static void compile_function(Compiler *parent_compiler, CompilationType type){
   consume(&func_compiler, TOKEN_LEFT_BRACE, "Expected '{' before function body.");
   block(&func_compiler);
 
+  // we do not need to end the scope because the compilation ends here
   ObjectFunction *func = end_of_compilation(&func_compiler);
   emit_constant(parent_compiler, ant_value.from_object(ant_function.as_object(func)));
 
   // func compiler returns the parser and scanner to the parent compiler
-  parent_compiler->parser  = func_compiler.parser;
+  parent_compiler->parser = func_compiler.parser;
   parent_compiler->scanner = func_compiler.scanner;
+
+  free_compiler(&func_compiler);
   TRACE_PARSER_EXIT();
 }
 
-
 /* */
 
-static void function_params(Compiler *compiler){
-   if(!check(compiler, TOKEN_RIGHT_PAREN)){
-      do {
-         compiler->function->arity++;
-         if(compiler->function->arity > OPTION_MAX_NUM_PARAMS){
-            char *message = NULL;
-            sprintf(message, "Cannot have more than %d parameters.", OPTION_MAX_NUM_PARAMS);;
-            error_at_current(&compiler->parser, message);
-         }
+static void function_params(Compiler *compiler) {
+  if (!check(compiler, TOKEN_RIGHT_PAREN)) {
+    do {
+      compiler->function->arity++;
+      if (compiler->function->arity > OPTION_MAX_NUM_PARAMS) {
+        errorf(&compiler->parser, "Cannot have more than %d parameters.", OPTION_MAX_NUM_PARAMS);
+      }
 
-         parse_variable(compiler, "Expected parameter name.");
-         define_local_variable(compiler);
-      } while(match(compiler, TOKEN_COMMA));
-   }
+      parse_variable(compiler, "Expected parameter name.");
+      define_local_variable(compiler);
+    } while (match(compiler, TOKEN_COMMA));
+  }
 }
-
 
 /* */
 
@@ -775,6 +775,13 @@ static void variable(Compiler *compiler, bool can_assign) {
 
 /* */
 
+static void call(Compiler *compiler, bool can_assign){
+   uint8_t arg_count = argument_list(compiler);
+   emit_two_bytes(compiler, OP_CALL, arg_count);
+}
+
+/* */
+
 static void literal(Compiler *compiler, bool _) {
   TRACE_PARSER_ENTER("Compiler *compiler = %p", compiler);
   TRACE_PARSER_TOKEN(compiler->parser.prev, compiler->parser.current);
@@ -912,9 +919,9 @@ static void named_variable(Compiler *compiler, Token name, bool can_assign) {
   int32_t local = ant_locals.resolve(&compiler->locals, &name);
 
   if (local == LOCALS_UNINITIALIZED) {
-    error(&compiler->parser,
-          "Cannot read local variable in its own initializer.");
+    error(&compiler->parser, "Cannot read local variable in its own initializer.");
   }
+
 
   int32_t index =
       is_global(local) ? make_global_identifier(compiler, &name) : local;
@@ -924,8 +931,7 @@ static void named_variable(Compiler *compiler, Token name, bool can_assign) {
       is_global(local) ? ant_chunk.write_set_global : ant_chunk.write_set_local;
 
   if (can_assign && match(compiler, TOKEN_EQUAL)) {
-    expression(
-        compiler); // on assigment, parse the expression after the equal sign
+    expression( compiler); // on assigment, parse the expression after the equal sign
     emit_variable(compiler, index, set);
 
   } else {
@@ -954,18 +960,15 @@ static int32_t parse_variable(Compiler *compiler, const char *message) {
     return -1; // dummy value
   }
 
-  int32_t globals_index =
-      make_global_identifier(compiler, &compiler->parser.prev);
+  int32_t globals_index = make_global_identifier(compiler, &compiler->parser.prev);
   TRACE_PARSER_EXIT();
   return globals_index;
 }
 
-/* Note that this function stores a constant but doesn't emit
- * emit a constant instruction. So we are returning the index in the
- * constant array so a later instruction can use it.
+/* Note that this function creates a global_index but doesn't emit
  * */
-static int32_t make_global_identifier(Compiler *compiler, Token *token) {
 
+static int32_t make_global_identifier(Compiler *compiler, Token *token) {
   ObjectString *str = ant_string.make(token->start, token->length);
 
   // mapping global variables using the compiler's globals table
@@ -973,6 +976,29 @@ static int32_t make_global_identifier(Compiler *compiler, Token *token) {
   Value globals_index = ant_mapping.add(&compiler->globals, str);
   return ant_value.as_number(globals_index);
 }
+
+/* Functions */
+
+static uint8_t argument_list(Compiler *compiler){
+   uint8_t arg_count = 0;
+
+   if(!check(compiler, TOKEN_RIGHT_PAREN)){
+
+      do {
+         expression(compiler);
+
+         if(arg_count == OPTION_MAX_NUM_PARAMS){
+             errorf(&compiler->parser, "Cannot have more than %d parameters.", OPTION_MAX_NUM_PARAMS);
+         }
+
+         arg_count++;
+      } while(match(compiler, TOKEN_COMMA));
+   }
+
+  consume(compiler, TOKEN_RIGHT_PAREN, "Expected ')' after arguments.");
+  return arg_count;
+}
+
 
 /* Block */
 
@@ -1027,12 +1053,10 @@ static void consume(Compiler *compiler, TokenType type, const char *message) {
 
 ObjectFunction *end_of_compilation(Compiler *compiler) {
   emit_byte(compiler, OP_RETURN);
-
   ObjectFunction *func = compiler->function;
 
 #ifdef DEBUG_PRINT_CODE
-  ant_debug.disassemble_chunk(compiler, func->name != NULL ? func->name->chars
-                                                           : "<script>");
+  ant_debug.disassemble_chunk(compiler, func->name != NULL ? func->name->chars : "<script>");
 #endif
 
   return func;
@@ -1150,6 +1174,18 @@ static void emit_two_bytes(Compiler *compiler, uint8_t byte1, uint8_t byte2) {
 
 /* */
 
+static void errorf(Parser *parser, const char *format, ...) {
+  char message[1024];
+  va_list args;
+  va_start(args, format);
+  vsprintf(message, format, args);
+  va_end(args);
+
+  error_at(parser, message);
+}
+
+/* */
+
 static void error(Parser *parser, const char *message) {
   error_at(parser, message);
 }
@@ -1165,9 +1201,8 @@ static void error_at_current(Parser *parser, const char *message) {
 static void error_at(Parser *parser, const char *message) {
   Token token = parser->current;
 
-  if (parser->panic_mode)
-    return; // suppress errors after the first one
-            //
+  if (parser->panic_mode) return; // suppress errors after the first one
+         
   parser->panic_mode = true;
 
   fprintf(stderr, "[line %d] Error", token.line);

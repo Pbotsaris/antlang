@@ -21,6 +21,7 @@ typedef enum {
   OP_LESS,               /* no operand */
   OP_PRINT,              /* no operand */
   OP_POP,                /* no operand */
+  OP_CALL,               /* 8-bit operand  */
   OP_JUMP,               /* 16-bit operand */
   OP_JUMP_IF_FALSE,      /* 16-bit operand */
   OP_LOOP,               /* 16-bit operand */

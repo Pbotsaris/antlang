@@ -21,6 +21,9 @@ valgrind: $(VALGRIND_TARGET)
 	# make valgrind ARGS="your args here"
 	valgrind --leak-check=full --show-leak-kinds=all --track-origins=yes ./$(VALGRIND_TARGET) $(ARGS)
 
+valgrind-gdb: $(VALGRIND_TARGET)
+	valgrind --leak-check=full --show-leak-kinds=all --track-origins=yes --vgdb=yes --vgdb-error=0 ./$(VALGRIND_TARGET) $(ARGS)
+
 run: $(TARGET)
 	./$(TARGET)
 

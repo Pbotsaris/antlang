@@ -89,8 +89,11 @@ static Value find_at(ValueArray *array, int32_t index) {
 }
 
 static void free_value_array(ValueArray *array) {
-  if (!array)
+
+  if (array == NULL){
+     fprintf(stderr, "ValueArray: array is NULL. Cannot free\n");
     return;
+  }
 
   FREE_ARRAY(Value, array->values, array->capacity);
   init_value_array(array);
