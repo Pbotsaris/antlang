@@ -84,9 +84,6 @@ typedef struct AntValue {
    (a).type == VAL_OBJECT ? VALUE_FROM_BOOL((a).as.object == (b).as.object) : \
    VALUE_FROM_BOOL(false))
 
-
-
-
 extern ValueAPI ant_value;
 
 #endif //ANT_VALUE_H

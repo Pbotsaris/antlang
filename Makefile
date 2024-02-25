@@ -5,7 +5,7 @@ BIN=bin
 # Base compilation flags (include paths, warnings)
 BASE_CFLAGS=-W -Wall -Wextra -Iinclude
 # Debug flags
-DEBUG_CFLAGS=$(BASE_CFLAGS) -g3
+DEBUG_CFLAGS=$(BASE_CFLAGS) -g3 -DDEBUG_TRACE_EXECUTION
 DEBUG_LDFLAGS=-fsanitize=address
 # Release (optimization) flags
 RELEASE_CFLAGS=$(BASE_CFLAGS) -O2
