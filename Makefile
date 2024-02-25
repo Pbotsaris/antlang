@@ -2,14 +2,17 @@ SRC=src
 OBJ=obj
 BIN=bin
 
-CFLAGS +=-W  -Wall -Wextra -g3 -Iinclude
-LDFLAGS +=-fsanitize=address
-
-PROFILE_FLAGS=-pg
-OPTIMIZATION_FLAGS=-O2
+# Base compilation flags (include paths, warnings)
+BASE_CFLAGS=-W -Wall -Wextra -Iinclude
+# Debug flags
+DEBUG_CFLAGS=$(BASE_CFLAGS) -g3
+DEBUG_LDFLAGS=-fsanitize=address
+# Release (optimization) flags
+RELEASE_CFLAGS=$(BASE_CFLAGS) -O2
 
 CC=clang
 TARGET=${BIN}/ant
+TARGET_DEBUG=${BIN}/ant_debug
 VALGRIND_TARGET=${BIN}/ant_valgrind
 PROFILE_TARGET=${BIN}/ant_profile
 
@@ -18,35 +21,42 @@ $(shell mkdir -p obj bin)
 SRCS=$(wildcard $(SRC)/*.c)
 OBJS=$(patsubst $(SRC)/%.c,$(OBJ)/%.o,$(SRCS))
 
+all: CFLAGS=$(RELEASE_CFLAGS)
 all: $(TARGET)
 
+debug: CFLAGS=$(DEBUG_CFLAGS)
+debug: LDFLAGS=$(DEBUG_LDFLAGS)
+debug: $(TARGET_DEBUG)
+
 valgrind: $(VALGRIND_TARGET)
-	# args are passed on via environment variable to make
-	# make valgrind ARGS="your args here"
 	valgrind --leak-check=full --show-leak-kinds=all --track-origins=yes ./$(VALGRIND_TARGET) $(ARGS)
 
 valgrind-gdb: $(VALGRIND_TARGET)
 	valgrind --leak-check=full --show-leak-kinds=all --track-origins=yes --vgdb=yes --vgdb-error=0 ./$(VALGRIND_TARGET) $(ARGS)
 
+profile: CFLAGS=$(RELEASE_CFLAGS) -pg
 profile: $(PROFILE_TARGET)
 	./$(PROFILE_TARGET) $(ARGS); gprof $(PROFILE_TARGET) gmon.out > analysis.txt
 
-run: $(TARGET)
-	./$(TARGET)
+run: $(TARGET_DEBUG)
+	./$(TARGET_DEBUG) $(ARGS)
 
 $(TARGET): $(OBJS)
-	$(CC) -o $(TARGET) $(OBJS) $(CFLAGS) $(LDFLAGS)
+	$(CC) $(CFLAGS) -o $(TARGET) $(OBJS)
+
+$(TARGET_DEBUG): $(OBJS)
+	$(CC) $(CFLAGS) $(LDFLAGS) -o $(TARGET_DEBUG) $(OBJS)
 
 $(VALGRIND_TARGET): $(OBJS)
-	$(CC) -o $(VALGRIND_TARGET) $(OBJS) $(CFLAGS)
+	$(CC) $(DEBUG_CFLAGS) -o $(VALGRIND_TARGET) $(OBJS)
 
 $(PROFILE_TARGET): $(OBJS)
-	$(CC) -o $(PROFILE_TARGET) $(OBJS) $(PROFILE_FLAGS) $(OPTIMIZATION_FLAGS)
+	$(CC) $(CFLAGS) -o $(PROFILE_TARGET) $(OBJS)
 
 $(OBJ)/%.o: $(SRC)/%.c
-	$(CC) $(CFLAGS) -c $< -o $@ 
+	$(CC) $(CFLAGS) -c $< -o $@
 
 clean:
-	rm -rf $(OBJ)/*.o $(TARGET)
+	rm -rf $(OBJ)/*.o $(BIN)/*
 
-.PHONY: all clean run
+.PHONY: all clean run debug valgrind valgrind-gdb profile

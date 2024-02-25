@@ -16,7 +16,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-
 /* Public */
 static VM *new_vm();
 static InterpretResult interpret(VM *vm, const char *source);
@@ -71,7 +70,7 @@ static InterpretResult interpret(VM *vm, const char *source) {
   /* add main func or type COMPILATION_TYPE_SCRIPT to slot 0 in the stack and calls it
      note that in locals.c:init_local_stack, we claim the slot 0 for the VM for this purpose 
    */
-  STACK_PUSH(ant_value.from_object(ant_function.as_object(main_func)));
+  STACK_PUSH(VALUE_FROM_OBJECT(FUNCTION_AS_OBJECT(main_func)));
   call(vm, main_func, 0);
 
   return run(vm);
@@ -142,23 +141,23 @@ static InterpretResult run(VM *vm) {
 })
 
 #define IS_NUMERIC_BINARY_OP() ( \
-    ant_value.is_number(STACK_PEEK(0)) && \
-    ant_value.is_number(STACK_PEEK(1)) \
+    VALUE_IS_NUMBER(STACK_PEEK(0)) && \
+    VALUE_IS_NUMBER(STACK_PEEK(1)) \
 )
 
 #define IS_STRING_BINARY_OP() ( \
-    ant_object.is_string(STACK_PEEK(0)) && \
-    ant_object.is_string(STACK_PEEK(1)) \
+    OBJECT_IS_STRING(STACK_PEEK(0)) && \
+    OBJECT_IS_STRING(STACK_PEEK(1)) \
 )
 
 #define BINARY_OP(value_type, op)                                              \
   do {                                                                         \
-    if (!IS_NUMERIC_BINARY_OP()) {                                           \
+    if (!IS_NUMERIC_BINARY_OP()) {                                             \
       runtime_error(vm, "Operands must be numbers");                           \
       return INTERPRET_RUNTIME_ERROR;                                          \
     }                                                                          \
-    double b = ant_value.as_number(STACK_POP());                               \
-    double a = ant_value.as_number(STACK_POP());                               \
+    double b = VALUE_AS_NUMBER(STACK_POP());                                   \
+    double a = VALUE_AS_NUMBER(STACK_POP());                                   \
     STACK_PUSH(value_type(a op b));                                            \
   } while (false)
 
@@ -188,7 +187,7 @@ static InterpretResult run(VM *vm) {
     case OP_JUMP_IF_FALSE: {
       uint16_t offset = READ_16BIT_OPERANDS(vm);
 
-      if (ant_value.is_falsey_bool(STACK_PEEK(0))) {
+      if (VALUE_IS_FALSEY_AS_BOOL(STACK_PEEK(0))) {
         frame->ip += offset;
       }
 
@@ -246,14 +245,13 @@ static InterpretResult run(VM *vm) {
     }
 
     case OP_NEGATE: {
-
-      if (!ant_value.is_number(STACK_PEEK(0))) {
+      if (!VALUE_IS_NUMBER(STACK_PEEK(0))) {
         runtime_error(vm, "Operand must be a number");
         return INTERPRET_RUNTIME_ERROR;
       }
 
-      double num = ant_value.as_number(STACK_POP());
-      Value val = ant_value.from_number(num * -1);
+      double num = VALUE_AS_NUMBER(STACK_POP());
+      Value val = VALUE_FROM_NUMBER(num * -1);
       STACK_PUSH(val);
       break;
     }
@@ -267,56 +265,56 @@ static InterpretResult run(VM *vm) {
         Value b = STACK_POP();
         Value a = STACK_POP();
         ObjectString *str = ant_string.concat(a, b);
-        STACK_PUSH(ant_value.from_object(ant_string.as_object(str)));
+        STACK_PUSH(VALUE_FROM_OBJECT(STRING_AS_OBJECT(str)));
         break;
       }
 
-      BINARY_OP(ant_value.from_number, +);
+      BINARY_OP(VALUE_FROM_NUMBER, +);
       break;
     }
 
     case OP_SUBTRACT:
-      BINARY_OP(ant_value.from_number, -);
+      BINARY_OP(VALUE_FROM_NUMBER, -);
       break;
 
     case OP_MULTIPLY:
-      BINARY_OP(ant_value.from_number, *);
+      BINARY_OP(VALUE_FROM_NUMBER, *);
       break;
 
     case OP_DIVIDE:
-      BINARY_OP(ant_value.from_number, /);
+      BINARY_OP(VALUE_FROM_NUMBER, /);
       break;
 
     case OP_GREATER:
-      BINARY_OP(ant_value.from_bool, >);
+      BINARY_OP(VALUE_FROM_BOOL, >);
       break;
 
     case OP_LESS:
-      BINARY_OP(ant_value.from_bool, <);
+      BINARY_OP(VALUE_FROM_BOOL, <);
       break;
 
     case OP_EQUAL: {
       Value a = STACK_POP();
       Value b = STACK_POP();
-      STACK_PUSH(ant_value.equals(b, a));
+      STACK_PUSH(VALUE_EQUALS(b, a));
       break;
     }
 
     case OP_FALSE:
-      STACK_PUSH(ant_value.from_bool(false));
+      STACK_PUSH(VALUE_FROM_BOOL(false));
       break;
 
     case OP_NIL:
-      STACK_PUSH(ant_value.make_nil());
+      STACK_PUSH(VALUE_FROM_NIL());
       break;
 
     case OP_NOT: {
-      Value value = ant_value.is_falsey(STACK_POP());
+      Value value = VALUE_IS_FALSEY(STACK_POP());
       STACK_PUSH(value);
       break;
     }
     case OP_TRUE:
-      STACK_PUSH(ant_value.from_bool(true));
+      STACK_PUSH(VALUE_FROM_BOOL(true));
       break;
 
     case OP_PRINT: {
@@ -396,7 +394,7 @@ static InterpretResult run(VM *vm) {
       int32_t global_index = (int32_t)READ_CHUNK_BYTE();
       Value value = ant_value_array.at(&vm->globals, global_index);
 
-      if (ant_value.is_undefined(value)) {
+      if (VALUE_IS_UNDEFINED(value)) {
         runtime_error(vm, "Undefined variable");
         return INTERPRET_RUNTIME_ERROR;
       }

@@ -20,6 +20,9 @@ typedef struct {
    int32_t        (*print)(void);
 }ObjectNativeAPI;
 
+#define NATIVE_AS_OBJECT(native) ((Object*)(native))
+#define NATIVE_FROM_VALUE(value) ((ObjectNative*)VALUE_AS_OBJECT(value))
+
 const extern ObjectNativeAPI ant_native;
 
 #endif // ANT_NATIVES_H

@@ -25,9 +25,7 @@ StringAPI ant_string = {
 Table strings = {.count = 0, .capacity = 0, .entries = NULL};
 
 /* Private */
-static ObjectString *allocate_string(char *chars, int32_t length,
-                                     uint32_t hash);
-;
+static ObjectString *allocate_string(char *chars, int32_t length, uint32_t hash); 
 static uint32_t hash_string(const char *key, int32_t length);
 
 void free_strings_table(void) { 

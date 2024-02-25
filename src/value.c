@@ -47,7 +47,7 @@ ValueAPI ant_value = {.from_bool = value_from_bool,
 
 /* */
 static Value value_from_bool(bool value) {
-  return (Value){.type = VAL_BOOL, .as.boolean = value};
+  return(Value){.type = VAL_BOOL, .as.boolean = value}; 
 }
 
 /* */

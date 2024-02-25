@@ -22,7 +22,6 @@ static ObjectFunction *new_function(void){
 }
 
 static int32_t print_function(ObjectFunction* func){
-
    if (func->name == NULL) {
       return printf("<script>");
    }

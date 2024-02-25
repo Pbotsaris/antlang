@@ -3,29 +3,17 @@ Flat profile:
 Each sample counts as 0.01 seconds.
   %   cumulative   self              self     total           
  time   seconds   seconds    calls  Ts/call  Ts/call  name    
- 67.58      2.50     2.50                             run
-  4.33      2.66     0.16                             call_value
-  4.33      2.82     0.16                             value_from_bool
-  3.24      2.94     0.12                             value_to_number
-  2.97      3.05     0.11                             find_at
-  2.43      3.14     0.09                             call
-  2.43      3.23     0.09                             is_number
-  2.03      3.31     0.08                             is_undefined
-  1.49      3.36     0.06                             value_from_number
-  1.35      3.41     0.05                             value_to_object
-  1.08      3.45     0.04                             is_object
-  1.08      3.49     0.04                             is_object_type
-  1.08      3.53     0.04                             value_from_undefined
-  0.95      3.57     0.04                             function_from_value
-  0.81      3.60     0.03                             is_falsey_bool
-  0.81      3.63     0.03                             is_nil
-  0.54      3.65     0.02                             get_type
-  0.54      3.67     0.02                             is_string
-  0.27      3.68     0.01                             value_to_bool
-  0.27      3.69     0.01                             write_value_at
-  0.14      3.69     0.01                             is_bool
-  0.14      3.70     0.01                             new_function
-  0.14      3.70     0.01                             write_undefined
+ 82.12      2.11     2.11                             run
+  3.89      2.21     0.10                             find_at
+  3.50      2.30     0.09                             call_value
+  2.92      2.38     0.08                             call
+  1.95      2.43     0.05                             is_object
+  1.95      2.48     0.05                             value_to_object
+  1.95      2.53     0.05                             function_from_value
+  0.78      2.55     0.02                             get_type
+  0.39      2.56     0.01                             runtime_error
+  0.39      2.57     0.01                             value_to_bool
+  0.19      2.57     0.01                             new_vm
 
  %         the percentage of the total running time of the
 time       program used by this function.

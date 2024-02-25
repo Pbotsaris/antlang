@@ -20,6 +20,9 @@ typedef struct {
    int32_t         (*print)(ObjectFunction* function);
 }ObjectFunctionAPI;
 
+#define FUNCTION_AS_OBJECT(function) ((Object*)(function))
+#define FUNCTION_FROM_VALUE(value) ((ObjectFunction*)VALUE_AS_OBJECT(value))
+
 const extern ObjectFunctionAPI ant_function;
 
 #endif //ANT_FUCTIONS_H

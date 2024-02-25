@@ -17,14 +17,18 @@ struct ObjectString {
 };
 
 typedef struct {
-   ObjectString*  (*new)             (const char *chars, int32_t length);
-   void           (*free_table)         (void);
+   ObjectString*  (*new)              (const char *chars, int32_t length);
+   void           (*free_table)       (void);
    ObjectString*  (*from_value)       (Value value);
    ObjectString*  (*concat)           (Value a, Value b);
    char*          (*as_cstring)       (ObjectString* string);
    int32_t        (*print)            (ObjectString* string, bool debug);
    Object*        (*as_object)        (ObjectString* string);
 }StringAPI;
+
+#define STRING_AS_OBJECT(string) ((Object*)(string))
+#define STRING_AS_CSTRING(string) ((string)->chars)
+#define STRING_FROM_VALUE(value) ((ObjectString*)VALUE_AS_OBJECT(value))
 
 extern StringAPI ant_string;
 extern Table strings;

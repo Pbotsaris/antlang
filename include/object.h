@@ -22,9 +22,14 @@ typedef struct ObjectAPI {
   bool           (*is_native)    (Value value);
   int32_t        (*print)        (Value value, bool debug);
   Object*        (*allocate)     (size_t size, ObjectType object_type);
-
   void           (*free)         (Object* object);
 }ObjectAPI;
+
+#define OBJECT_TYPE(value)          (VALUE_AS_OBJECT((value))->type)
+#define OBJECT_IS_TYPE(value, type) (VALUE_IS_OBJECT((value)) && OBJECT_TYPE((value)) == (type))
+#define OBJECT_IS_STRING(value)     (OBJECT_IS_TYPE((value), OBJ_STRING))
+#define OBJECT_IS_FUNCTION(value)   (OBJECT_IS_TYPE((value), OBJ_FUNCTION))
+#define OBJECT_IS_NATIVE(value)     (OBJECT_IS_TYPE((value), OBJ_NATIVE))
 
 extern ObjectAPI ant_object;
 #endif // ANT_OBJECT_H
