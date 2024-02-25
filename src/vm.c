@@ -9,7 +9,8 @@
 #include "strings.h"
 #include "value_array.h"
 #include "functions.h"
-
+#include "natives.h"
+#include "var_mapping.h"
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -33,19 +34,11 @@ AntVMAPI ant_vm = {
 static InterpretResult run(VM *vm);
 static void runtime_error(VM *vm, const char *format, ...);
 
-/* Stack */
-static void reset_stack(VM *vm);
-static void push_stack(VM *vm, Value value);
-static Value pop_stack(VM *vm);
-static bool stack_overflow(VM *vm, int32_t stack_index);
-static void print_stack(VM *vm);
-static Value peek_stack(VM *vm, int32_t distance);
-
 /* functions */
 static bool call_value(VM *vm, Value callee, int32_t arg_count);
 static bool call(VM* vm, ObjectFunction *func, int32_t arg_count);
 
-/* OP Helpeers */
+/* OP Helpers */
 static int32_t read_24bit_operand(VM *vm);
 static uint16_t read_16bit_operand(VM *vm);
 static bool is_numeric_binary_op(VM *vm);
@@ -60,14 +53,17 @@ static VM *new_vm() {
     exit(1);
   }
 
-  reset_stack(vm);
-
+  ant_mapping.init();
+  ant_stack.reset(&vm->stack);
   ant_compiler.init(&vm->compiler, COMPILATION_TYPE_SCRIPT);
   ant_value_array.init_undefined(&vm->globals);
-  vm->frame_count = 0;
 
+  ant_native.register_all(vm);
+  vm->frame_count = 0;
   return vm;
 }
+
+/* */
 
 static InterpretResult interpret(VM *vm, const char *source) {
 
@@ -80,11 +76,14 @@ static InterpretResult interpret(VM *vm, const char *source) {
   /* add main func or type COMPILATION_TYPE_SCRIPT to slot 0 in the stack and calls it
      note that in locals.c:init_local_stack, we claim the slot 0 for the VM for this purpose 
    */
-  push_stack(vm, ant_value.from_object(ant_function.as_object(main_func)));
+  ant_stack.push(&vm->stack, ant_value.from_object(ant_function.as_object(main_func)));
   call(vm, main_func, 0);
 
   return run(vm);
 }
+
+
+/* */
 
 static void repl(VM *vm) {
   char line[OPTION_LINE_MAX];
@@ -110,17 +109,21 @@ static void repl(VM *vm) {
   }
 }
 
+/* */
+
 static void free_vm(VM *vm) {
-  ant_compiler.free(&vm->compiler);
   ant_memory.free_objects();
 
-  /* note that this only clears the strings hash table
-   * the actual strings are managed by the garbage collector
+  /* this only clear entries in the hash table
+   * the actual strings allocations are managed by the garbage collector
    * */
   ant_string.free_table();
   ant_value_array.free(&vm->globals);
+  ant_mapping.free();
   FREE(VM, vm);
 }
+
+/* the Massive run function */
 
 static InterpretResult run(VM *vm) {
 
@@ -137,9 +140,9 @@ static InterpretResult run(VM *vm) {
       runtime_error(vm, "Operands must be numbers");                           \
       return INTERPRET_RUNTIME_ERROR;                                          \
     }                                                                          \
-    double b = ant_value.as_number(pop_stack(vm));                             \
-    double a = ant_value.as_number(pop_stack(vm));                             \
-    push_stack(vm, value_type(a op b));                                        \
+    double b = ant_value.as_number(ant_stack.pop(&vm->stack));                 \
+    double a = ant_value.as_number(ant_stack.pop(&vm->stack));                  \
+    ant_stack.push(&vm->stack, value_type(a op b));                            \
   } while (false)
 
 #ifdef DEBUG_TRACE_EXECUTION
@@ -149,13 +152,14 @@ static InterpretResult run(VM *vm) {
   for (;;) {
 
 #ifdef DEBUG_TRACE_EXECUTION
-    print_stack(vm);
+    ant_stack.print(&vm->stack);
     /* address to index, get the relative offset */
     int32_t offset = (int32_t)(frame->ip - frame->func->chunk.code);
     ant_debug.disassemble_instruction(&vm->compiler, &frame->func->chunk, offset);
 #endif
 
     uint8_t instruction;
+
     switch ((instruction = READ_CHUNK_BYTE())) {
 
     case OP_JUMP: {
@@ -168,7 +172,7 @@ static InterpretResult run(VM *vm) {
     case OP_JUMP_IF_FALSE: {
       uint16_t offset = read_16bit_operand(vm);
 
-      if (ant_value.is_falsey_bool(peek_stack(vm, 0))) {
+      if (ant_value.is_falsey_bool(ant_stack.peek(&vm->stack, 0))) {
         frame->ip += offset;
       }
 
@@ -187,7 +191,7 @@ static InterpretResult run(VM *vm) {
     case OP_CALL: {
       int32_t arg_count = (int32_t)READ_CHUNK_BYTE();
       /* note how arg_count will be the number of arguments on the stack. we grab the last one */
-      if(!call_value(vm, peek_stack(vm, arg_count), arg_count)){
+      if(!call_value(vm, ant_stack.peek(&vm->stack, arg_count), arg_count)){
          return INTERPRET_RUNTIME_ERROR;
       }
       /* if call_value is successful there will be a new frame */
@@ -197,12 +201,12 @@ static InterpretResult run(VM *vm) {
 
     case OP_RETURN:{
 
-         Value result = pop_stack(vm);
+         Value result = ant_stack.pop(&vm->stack);;
          vm->frame_count--;
          
       /* script main function */
        if(vm->frame_count == 0){
-        pop_stack(vm);
+        ant_stack.pop(&vm->stack);
         return INTERPRET_OK;
        }
 
@@ -219,35 +223,35 @@ static InterpretResult run(VM *vm) {
         *                 ^ stack top
         * */
 
-       vm->stack_top = frame->slots;
-       push_stack(vm, result);
+       vm->stack.top = frame->slots;
+       ant_stack.push(&vm->stack, result);
        frame = vm->frames + (vm->frame_count - 1);
        break;
     }
 
     case OP_NEGATE: {
 
-      if (!ant_value.is_number(peek_stack(vm, 0))) {
+      if (!ant_value.is_number(ant_stack.peek(&vm->stack, 0))) {
         runtime_error(vm, "Operand must be a number");
         return INTERPRET_RUNTIME_ERROR;
       }
 
-      double num = ant_value.as_number(pop_stack(vm));
+      double num = ant_value.as_number(ant_stack.pop(&vm->stack));
       Value val = ant_value.from_number(num * -1);
-      push_stack(vm, val);
+      ant_stack.push(&vm->stack, val);
       break;
     }
 
     case OP_POSITIVE:
-      push_stack(vm, pop_stack(vm));
+      ant_stack.push(&vm->stack, ant_stack.pop(&vm->stack));
       break;
 
     case OP_ADD: {
       if (is_string_binary_op(vm)) {
-        Value b = pop_stack(vm);
-        Value a = pop_stack(vm);
+        Value b = ant_stack.pop(&vm->stack);
+        Value a = ant_stack.pop(&vm->stack);
         ObjectString *str = ant_string.concat(a, b);
-        push_stack(vm, ant_value.from_object(ant_string.as_object(str)));
+        ant_stack.push(&vm->stack, ant_value.from_object(ant_string.as_object(str)));
         break;
       }
 
@@ -276,31 +280,31 @@ static InterpretResult run(VM *vm) {
       break;
 
     case OP_EQUAL: {
-      Value a = pop_stack(vm);
-      Value b = pop_stack(vm);
-      push_stack(vm, ant_value.equals(b, a));
+      Value a = ant_stack.pop(&vm->stack);
+      Value b = ant_stack.pop(&vm->stack);
+      ant_stack.push(&vm->stack, ant_value.equals(b, a));
       break;
     }
 
     case OP_FALSE:
-      push_stack(vm, ant_value.from_bool(false));
+      ant_stack.push(&vm->stack, ant_value.from_bool(false));
       break;
 
     case OP_NIL:
-      push_stack(vm, ant_value.make_nil());
+      ant_stack.push(&vm->stack, ant_value.make_nil());
       break;
 
     case OP_NOT: {
-      Value value = ant_value.is_falsey(pop_stack(vm));
-      push_stack(vm, value);
+      Value value = ant_value.is_falsey(ant_stack.pop(&vm->stack));
+      ant_stack.push(&vm->stack, value);
       break;
     }
     case OP_TRUE:
-      push_stack(vm, ant_value.from_bool(true));
+      ant_stack.push(&vm->stack, ant_value.from_bool(true));
       break;
 
     case OP_PRINT: {
-      Value value = pop_stack(vm);
+      Value value = ant_stack.pop(&vm->stack);
       ant_value.print(value, false);
       // printf("\n");
       break;
@@ -308,67 +312,67 @@ static InterpretResult run(VM *vm) {
 
       /* OP_POP discards the top value from the stack */
     case OP_POP: {
-      pop_stack(vm);
+      ant_stack.pop(&vm->stack);
       break;
     }
 
     case OP_GET_LOCAL: {
       int32_t index = (int32_t)READ_CHUNK_BYTE();
 
-      if (stack_overflow(vm, index)) {
+      if (ant_stack.is_overflow(&vm->stack, index)) {
         runtime_error(vm, "OP_GET_LOCAL: Stack overflow at index %d", index);
         return INTERPRET_RUNTIME_ERROR;
       }
 
       // using frame->slots to access relative to the current frame
-      push_stack( vm, frame->slots[index]);
+      ant_stack.push(&vm->stack, frame->slots[index]);
       break;
     }
 
     case OP_GET_LOCAL_LONG: {
       int32_t index = read_24bit_operand(vm);
 
-      if (stack_overflow(vm, index)) {
+      if (ant_stack.is_overflow(&vm->stack, index)) {
         runtime_error(vm, "OP_GET_LOCAL_LONG: Stack overflow at index %d", index);
         return INTERPRET_RUNTIME_ERROR;
       }
-      push_stack(vm, frame->slots[index]);
+      ant_stack.push(&vm->stack, frame->slots[index]);
       break;
     }
 
     case OP_SET_LOCAL: {
       int32_t index = (int32_t)READ_CHUNK_BYTE();
 
-      if (stack_overflow(vm, index)) {
+      if (ant_stack.is_overflow(&vm->stack, index)) {
         runtime_error(vm, "OP_SET_LOCAL: Stack overflow at index %d", index);
         return INTERPRET_RUNTIME_ERROR;
       }
       // using frame->slots to set relative to the current frame
-      frame->slots[index] = peek_stack(vm, 0);
+      frame->slots[index] = ant_stack.peek(&vm->stack, 0);
       break;
     }
 
     case OP_SET_LOCAL_LONG: {
       int32_t index = read_24bit_operand(vm);
 
-      if (stack_overflow(vm, index)) {
+      if (ant_stack.is_overflow(&vm->stack, index)) {
         runtime_error(vm, "OP_SET_LOCAL_LONG: Stack overflow at index %d", index);
         return INTERPRET_RUNTIME_ERROR;
       }
 
-      frame->slots[index] = peek_stack(vm, 0);
+      frame->slots[index] = ant_stack.peek(&vm->stack, 0);
       break;
     }
 
     case OP_DEFINE_GLOBAL: {
       int32_t global_index = (int32_t)READ_CHUNK_BYTE();
-      ant_value_array.write_at(&vm->globals, pop_stack(vm), global_index);
+      ant_value_array.write_at(&vm->globals, ant_stack.pop(&vm->stack), global_index);
       break;
     }
 
     case OP_DEFINE_GLOBAL_LONG: {
       int32_t global_index = read_24bit_operand(vm);
-      ant_value_array.write_at(&vm->globals, pop_stack(vm), global_index);
+      ant_value_array.write_at(&vm->globals, ant_stack.pop(&vm->stack), global_index);
       break;
     }
 
@@ -381,7 +385,7 @@ static InterpretResult run(VM *vm) {
         return INTERPRET_RUNTIME_ERROR;
       }
 
-      push_stack(vm, value);
+      ant_stack.push(&vm->stack, value);
       break;
     }
 
@@ -394,7 +398,7 @@ static InterpretResult run(VM *vm) {
         return INTERPRET_RUNTIME_ERROR;
       }
 
-      push_stack(vm, value);
+      ant_stack.push(&vm->stack, value);
       break;
     }
 
@@ -410,7 +414,7 @@ static InterpretResult run(VM *vm) {
       // note that we peek the stack here.
       // assigment is an expression, so we need to keep the value on the stack.
       // in case the assignment is part of a larger expression.
-      ant_value_array.write_at(&vm->globals, peek_stack(vm, 0), global_index);
+      ant_value_array.write_at(&vm->globals, ant_stack.peek(&vm->stack, 0), global_index);
       break;
     }
 
@@ -423,17 +427,17 @@ static InterpretResult run(VM *vm) {
         return INTERPRET_RUNTIME_ERROR;
       }
 
-      ant_value_array.write_at(&vm->globals, peek_stack(vm, 0), global_index);
+      ant_value_array.write_at(&vm->globals, ant_stack.peek(&vm->stack, 0), global_index);
       break;
     }
 
     case OP_CONSTANT:
-      push_stack(vm, READ_CHUNK_CONSTANT());
+      ant_stack.push(&vm->stack, READ_CHUNK_CONSTANT());
       break;
 
     case OP_CONSTANT_LONG: {
       double constant = (double)read_24bit_operand(vm);
-      push_stack(vm, ant_value.from_number(constant));
+      ant_stack.push(&vm->stack, ant_value.from_number(constant));
       break;
     }
     }
@@ -444,33 +448,23 @@ static InterpretResult run(VM *vm) {
   }
 }
 
-/* Stack */
-
-static void reset_stack(VM *vm) { vm->stack_top = vm->stack; }
-
-/**/
-
-static void push_stack(VM *vm, Value value) {
-
-  int32_t stack_index = (int32_t)(vm->stack_top - vm->stack);
-
-  if (stack_index == OPTION_STACK_MAX) {
-    fprintf(stderr, "Stack overflow\n");
-    exit(11);
-  }
-
-  *(vm->stack_top) = value;
-  vm->stack_top++;
-}
-
-/**/
 
 static bool call_value(VM *vm, Value callee, int32_t arg_count) {
-
    if(ant_value.is_object(callee)){
       switch(ant_object.type(callee)){
          case OBJ_FUNCTION:
             return call(vm, ant_function.from_value(callee), arg_count);
+
+         case OBJ_NATIVE:{
+
+            ObjectNative *native = ant_native.from_value(callee);
+            Value result         = native->func(arg_count, vm->stack.top - arg_count);
+
+            vm->stack.top -= arg_count + 1;
+            ant_stack.push(&vm->stack, result);
+            return true;
+         }
+
          default:
             break; // non-callable object
       }
@@ -506,13 +500,10 @@ static bool call(VM *vm, ObjectFunction *func, int32_t arg_count) {
    frame->ip = func->chunk.code;
    // position the slots to be just below the arguments, on function call
    // -1 is to account for stack slot 0 which is reserved for the VM/method calls.
-   frame->slots = vm->stack_top - arg_count - 1;
+   frame->slots = vm->stack.top - arg_count - 1;
    vm->frame_count++;
-
    return true;
 }
-
-/* */
 
 static int32_t read_24bit_operand(VM *vm) {
   CallFrame *frame = vm->frames + vm->frame_count -1;
@@ -557,58 +548,19 @@ static void runtime_error(VM *vm, const char *format, ...) {
 
   }
 
-  reset_stack(vm);
-}
-
-/**/
-
-static Value pop_stack(VM *vm) {
-
-  if (vm->stack_top == vm->stack) {
-    fprintf(stderr, "Stack underflow\n");
-    exit(11);
-  }
-
-  vm->stack_top--;
-  return *(vm->stack_top);
-}
-
-static bool stack_overflow(VM *vm, int32_t stack_index) {
-  return  vm->stack == vm->stack_top || stack_index == OPTION_STACK_MAX ||
-         vm->stack_top < &vm->stack[stack_index];
-}
-
-static void print_stack(VM *vm) {
-  printf("        ");
-  for (Value *slot = vm->stack; slot < vm->stack_top; slot++) {
-    printf("[");
-    ant_value.print(*slot, true);
-    printf("]");
-  }
-
-  if (vm->stack_top == vm->stack) {
-    printf("[]");
-  }
-
-  printf("\n");
-}
-
-/**/
-
-static Value peek_stack(VM *vm, int32_t distance) {
-  return vm->stack_top[-1 - distance];
+  ant_stack.reset(&vm->stack);
 }
 
 /**/
 
 static bool is_numeric_binary_op(VM *vm) {
-  return ant_value.is_number(peek_stack(vm, 0)) &&
-         ant_value.is_number(peek_stack(vm, 1));
+  return ant_value.is_number(ant_stack.peek(&vm->stack, 0)) &&
+         ant_value.is_number(ant_stack.peek(&vm->stack, 1));
 }
 
 /**/
 
 static bool is_string_binary_op(VM *vm) {
-  return ant_object.is_string(peek_stack(vm, 0)) &&
-         ant_object.is_string(peek_stack(vm, 1));
+  return ant_object.is_string(ant_stack.peek(&vm->stack, 0)) &&
+         ant_object.is_string(ant_stack.peek(&vm->stack, 1));
 }

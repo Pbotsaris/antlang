@@ -1,13 +1,12 @@
-#include <stdio.h>
-#include <stdlib.h>
-
 #include "compiler.h"
 #include "config.h"
 #include "functions.h"
-#include "object.h"
-#include <stdarg.h>
 #include "strings.h"
+#include "var_mapping.h"
 
+#include <stdio.h>
+#include <stdlib.h>
+#include <stdarg.h>
 #if defined(DEBUG_PRINT_CODE) || defined(DEBUG_TRACE_PARSER)
 #include "debug.h"
 #endif
@@ -51,12 +50,10 @@ typedef bool (*Callback)(Chunk *chunk, int32_t const_index, int32_t line);
 /* Public */
 static void init_compiler(Compiler *compiler, CompilationType type);
 static ObjectFunction *compile(Compiler *compiler, const char *source);
-static void free_compiler(Compiler *compiler);
 
 const AntCompilerAPI ant_compiler = {
     .init = init_compiler,
     .compile = compile,
-    .free = free_compiler,
 };
 
 /** declarations **/
@@ -204,21 +201,13 @@ static bool is_global(int32_t local_index);
 
 /* Compiler API */
 static void init_compiler(Compiler *compiler, CompilationType type) {
-  compiler->function = NULL;
+  compiler->func = NULL;
   compiler->type = type;
 
   /* scanner gets initialize on compile method */
   ant_parser.init(&compiler->parser);
-  ant_mapping.init(&compiler->globals);
   ant_locals.init(&compiler->locals);
-  compiler->function = ant_function.new();
-}
-
-/**/
-
-static void free_compiler(Compiler *compiler) {
-  /* current_chunk gets freed in vm */
-  ant_mapping.free(&compiler->globals);
+  compiler->func = ant_function.new();
 }
 
 /**/
@@ -430,8 +419,6 @@ static void while_statement(Compiler *compiler) {
  *         OP_POP
  *      continues...
  *
- *
- *
  * */
 static void for_statement(Compiler *compiler) {
   TRACE_PARSER_ENTER("Compiler *compiler = %p", compiler);
@@ -483,22 +470,6 @@ static void for_statement(Compiler *compiler) {
   }
 
   end_scope(compiler);
-  TRACE_PARSER_EXIT();
-}
-
-/**/
-
-static void print_statement(Compiler *compiler) {
-  TRACE_PARSER_ENTER("Compiler *compiler = %p", compiler);
-  TRACE_PARSER_TOKEN(compiler->parser.prev, compiler->parser.current);
-  // parse expression first so when print is called there's a value on top of
-  // the stack
-  expression(compiler);
-
-  // TODO: Maybe remove semicolon from the language
-  consume(compiler, TOKEN_SEMICOLON, "Expected ';' after value");
-  emit_byte(compiler, OP_PRINT);
-
   TRACE_PARSER_EXIT();
 }
 
@@ -575,6 +546,22 @@ static void return_statement(Compiler *compiler){
 
 /**/
 
+static void print_statement(Compiler *compiler) {
+  TRACE_PARSER_ENTER("Compiler *compiler = %p", compiler);
+  TRACE_PARSER_TOKEN(compiler->parser.prev, compiler->parser.current);
+  // parse expression first so when print is called there's a value on top of
+  // the stack
+  expression(compiler);
+
+  // TODO: Maybe remove semicolon from the language
+  consume(compiler, TOKEN_SEMICOLON, "Expected ';' after value");
+  emit_byte(compiler, OP_PRINT);
+
+  TRACE_PARSER_EXIT();
+}
+
+/**/
+
 static void expression_statement(Compiler *compiler) {
   TRACE_PARSER_ENTER("Compiler *compiler = %p", compiler);
   TRACE_PARSER_TOKEN(compiler->parser.prev, compiler->parser.current);
@@ -609,7 +596,7 @@ static void compile_function(Compiler *parent_compiler, CompilationType type) {
   Parser *parser = &parent_compiler->parser;
 
   if (type != COMPILATION_TYPE_SCRIPT) {
-    func_compiler.function->name = ant_string.make(parser->prev.start, parser->prev.length);
+    func_compiler.func->name = ant_string.new(parser->prev.start, parser->prev.length);
   }
 
   begin_scope(&func_compiler);
@@ -626,8 +613,6 @@ static void compile_function(Compiler *parent_compiler, CompilationType type) {
   // func compiler returns the parser and scanner to the parent compiler
   parent_compiler->parser = func_compiler.parser;
   parent_compiler->scanner = func_compiler.scanner;
-
-  free_compiler(&func_compiler);
   TRACE_PARSER_EXIT();
 }
 
@@ -636,8 +621,8 @@ static void compile_function(Compiler *parent_compiler, CompilationType type) {
 static void function_params(Compiler *compiler) {
   if (!check(compiler, TOKEN_RIGHT_PAREN)) {
     do {
-      compiler->function->arity++;
-      if (compiler->function->arity > OPTION_MAX_NUM_PARAMS) {
+      compiler->func->arity++;
+      if (compiler->func->arity > OPTION_MAX_NUM_PARAMS) {
         errorf(&compiler->parser, "Cannot have more than %d parameters.", OPTION_MAX_NUM_PARAMS);
       }
 
@@ -833,7 +818,7 @@ void string(Compiler *compiler, bool _) {
   const char *chars = compiler->parser.prev.start + 1; // skip the first quote
   int32_t length =
       compiler->parser.prev.length - 2; // skip the first and last quote
-  ObjectString *string = ant_string.make(chars, length);
+  ObjectString *string = ant_string.new(chars, length);
   Value value = ant_value.from_object(ant_string.as_object(string));
 
   emit_constant(compiler, value);
@@ -993,11 +978,11 @@ static int32_t parse_variable(Compiler *compiler, const char *message) {
  * */
 
 static int32_t make_global_identifier(Compiler *compiler, Token *token) {
-  ObjectString *str = ant_string.make(token->start, token->length);
+  ObjectString *str = ant_string.new(token->start, token->length);
 
   // mapping global variables using the compiler's globals table
   // so vm can access value with O(1) direct indexing
-  Value globals_index = ant_mapping.add(&compiler->globals, str);
+  Value globals_index = ant_mapping.add(str);
   return ant_value.as_number(globals_index);
 }
 
@@ -1077,7 +1062,7 @@ static void consume(Compiler *compiler, TokenType type, const char *message) {
 
 ObjectFunction *end_of_compilation(Compiler *compiler) {
   emit_return_nil(compiler);
-  ObjectFunction *func = compiler->function;
+  ObjectFunction *func = compiler->func;
 
 #ifdef DEBUG_PRINT_CODE
   ant_debug.disassemble_chunk(compiler, &func->chunk, func->name != NULL ? func->name->chars : "<script>");
@@ -1254,7 +1239,7 @@ static void error_at(Parser *parser, const char *message) {
 }
 /**/
 static Chunk *current_chunk(Compiler *compiler) {
-  return &compiler->function->chunk;
+  return &compiler->func->chunk;
 }
 
 /**/

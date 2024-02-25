@@ -11,16 +11,13 @@ typedef struct {
    ValueArray reverse_lookup;
 }VarMapping;
 
-
 typedef struct {
-   void(*init)(VarMapping*);
-   void(*free)(VarMapping*);
-   Value(*add)(VarMapping*, ObjectString*);
-   ObjectString*(*find_name)(VarMapping*, int32_t);
-
+   void         (*init)(void);
+   void         (*free)(void);
+   Value        (*add)(ObjectString*);
+   ObjectString*(*find_name)(int32_t);
 }VarMappingAPI;
 
 extern const VarMappingAPI ant_mapping;
-
 
 #endif // ANT_VARIABLES_H

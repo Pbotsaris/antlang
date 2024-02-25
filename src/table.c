@@ -1,8 +1,8 @@
 #include "table.h"
 #include "config.h"
 #include "memory.h"
-#include "strings.h"
 #include <string.h>
+#include <stdio.h>
 
 static void init_table(Table *table);
 static void free_table(Table *table);

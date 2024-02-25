@@ -4,7 +4,7 @@
 #include <stdio.h>
 #include <string.h>
 static ObjectString *to_obj_string(Value value);
-static ObjectString *make_string(const char *chars, int length);
+static ObjectString *new_string(const char *chars, int length);
 static ObjectString *concat_string(Value a, Value b);
 static char *as_cstring(ObjectString *string);
 static int32_t print_string(ObjectString *string, bool debug);
@@ -13,7 +13,7 @@ static Object *as_object(ObjectString *string);
 static void free_strings_table(void);
 
 StringAPI ant_string = {
-    .make = make_string,
+    .new = new_string,
     .free_table = free_strings_table,
     .as_cstring = as_cstring,
     .concat = concat_string,
@@ -71,7 +71,7 @@ static ObjectString *concat_string(Value a, Value b) {
 
 /* */
 
-static ObjectString *make_string(const char *chars, int32_t length) {
+static ObjectString *new_string(const char *chars, int32_t length) {
 
   /* checks wether the const char* already exists in string table */
   uint32_t hash = hash_string(chars, length);

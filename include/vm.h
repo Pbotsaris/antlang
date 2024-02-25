@@ -1,9 +1,9 @@
 #ifndef ANT_VM_H
 #define ANT_VM_H
 
-#include "chunk.h"
 #include "compiler.h"
 #include "config.h"
+#include "stack.h"
 
 typedef enum {
    INTERPRET_OK,
@@ -19,8 +19,7 @@ typedef struct {
 }CallFrame;
 
 typedef struct VM{
-   Value       stack[OPTION_STACK_MAX]; //TODO: make this dynamic
-   Value*      stack_top;            
+   Stack       stack;
    Compiler    compiler;            
    ValueArray  globals;
    CallFrame   frames[OPTION_FRAMES_MAX];

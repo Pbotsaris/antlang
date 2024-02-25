@@ -7,6 +7,7 @@
 typedef enum {
   OBJ_STRING = 0,
   OBJ_FUNCTION = 1,
+  OBJ_NATIVE = 2,
 } ObjectType;
 
 struct Object {
@@ -18,6 +19,7 @@ typedef struct ObjectAPI {
   ObjectType     (*type)         (Value value);
   bool           (*is_string)    (Value value);
   bool           (*is_function)  (Value value);
+  bool           (*is_native)    (Value value);
   int32_t        (*print)        (Value value, bool debug);
   Object*        (*allocate)     (size_t size, ObjectType object_type);
 

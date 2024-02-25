@@ -5,6 +5,7 @@
 #include "strings.h"
 #include "utils.h"
 #include "value_array.h"
+#include "var_mapping.h"
 
 #include <stdarg.h>
 #include <stdio.h>
@@ -27,7 +28,7 @@ static int32_t print_instruction(const char *name, int32_t offset);
 static int32_t print_byte_instruction(const char *name, Chunk *frame_chunk, int32_t offset);
 static int32_t print_jump_instruction(const char *name, Chunk *frame_chunk, int32_t sign, int32_t offset);
 static int32_t print_constant_instruction(const char *name, Chunk *frame_chunk, int32_t offset);
-static int32_t print_global_instruction(const char *name, Compiler *compiler, Chunk *frame_chunk, int offset);
+static int32_t print_global_instruction(const char *name, Chunk *frame_chunk, int offset);
 static int32_t print_local_instruction(const char *name, Compiler *compiler, Chunk *frame_chunk, int offset);
 
 static int32_t unpack_bitecode_operand(Chunk *chunk, int *offset);
@@ -162,22 +163,22 @@ static int32_t disassemble_instruction(Compiler *compiler, Chunk *frame_chunk, i
     return print_byte_instruction("OP_CALL", frame_chunk, offset);
 
   case OP_DEFINE_GLOBAL:
-    return print_global_instruction("OP_DEFINE_GLOBAL", compiler, frame_chunk, offset);
+    return print_global_instruction("OP_DEFINE_GLOBAL", frame_chunk, offset);
 
   case OP_DEFINE_GLOBAL_LONG:
-    return print_global_instruction("OP_DEFINE_GLOBAL_LONG", compiler, frame_chunk, offset);
+    return print_global_instruction("OP_DEFINE_GLOBAL_LONG", frame_chunk, offset);
 
   case OP_GET_GLOBAL:
-    return print_global_instruction("OP_GET_GLOBAL", compiler, frame_chunk, offset);
+    return print_global_instruction("OP_GET_GLOBAL",  frame_chunk, offset);
 
   case OP_GET_GLOBAL_LONG:
-    return print_global_instruction("OP_GET_GLOBAL_LONG", compiler, frame_chunk, offset);
+    return print_global_instruction("OP_GET_GLOBAL_LONG", frame_chunk, offset);
 
   case OP_SET_GLOBAL:
-    return print_global_instruction("OP_SET_GLOBAL", compiler, frame_chunk, offset);
+    return print_global_instruction("OP_SET_GLOBAL", frame_chunk, offset);
 
   case OP_SET_GLOBAL_LONG:
-    return print_global_instruction("OP_SET_GLOBAL_LONG", compiler, frame_chunk, offset);
+    return print_global_instruction("OP_SET_GLOBAL_LONG",frame_chunk, offset);
 
   case OP_GET_LOCAL:
     return print_local_instruction("OP_GET_LOCAL", compiler, frame_chunk, offset);
@@ -236,12 +237,12 @@ static int32_t print_jump_instruction(const char *name, Chunk *frame_chunk, int3
 
 /* */
 
-static int32_t print_global_instruction(const char *name, Compiler *compiler, Chunk *frame_chunk, int offset) {
+static int32_t print_global_instruction(const char *name, Chunk *frame_chunk, int offset) {
 
   int32_t global_index = unpack_bitecode_operand(frame_chunk, &offset);
 
-  int32_t print_len = printf("%-16s %4d:", name, global_index);
-  ObjectString *global_name = ant_mapping.find_name(&compiler->globals, global_index);
+  int32_t print_len         = printf("%-16s %4d:", name, global_index);
+  ObjectString *global_name = ant_mapping.find_name(global_index);
 
   print_len += printf("Global {");
   print_len += ant_string.print(global_name, true);

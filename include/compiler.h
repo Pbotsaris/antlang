@@ -1,11 +1,9 @@
 #ifndef ANT_COMPILER_H
 #define ANT_COMPILER_H
-#include "chunk.h"
 #include "scanner.h"
-#include "var_mapping.h"
 #include "parser.h"
 #include "locals.h"
-#include "functions.h"
+#include "common.h"
 
 typedef enum {
   PREC_NONE       = 0,  /* Lowest precedence */
@@ -31,17 +29,15 @@ typedef enum {
 typedef struct Compiler {
   Scanner scanner;
   Parser parser;
-  VarMapping globals;
   LocalStack locals;
-  ObjectFunction *function;
+  ObjectFunction *func;
   CompilationType type;
 
 } Compiler;
 
 typedef struct AntCompiler {
-  void (*init)(Compiler *compiler, CompilationType type);
+  void            (*init)(Compiler *compiler, CompilationType type);
   ObjectFunction* (*compile)(Compiler *compiler, const char *source);
-  void (*free)(Compiler *compiler);
 } AntCompilerAPI;
 
 const extern AntCompilerAPI ant_compiler;

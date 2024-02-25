@@ -1,6 +1,7 @@
 #include "object.h"
 #include "memory.h"
 #include "functions.h"
+#include "natives.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -10,6 +11,7 @@
 static ObjectType get_type(Value value);
 static bool is_string(Value value);
 static bool is_function(Value value);
+static bool is_native(Value value);
 
 static bool is_object_type(Value value, ObjectType type);
 static int32_t print_object(Value value, bool debug);
@@ -21,6 +23,7 @@ ObjectAPI ant_object = {
     .type = get_type,
     .is_string = is_string,
     .is_function = is_function,
+    .is_native = is_native,
     .print = print_object,
     .allocate = allocate_object,
     .free = free_object,
@@ -42,6 +45,10 @@ static bool is_function(Value value) { return is_object_type(value, OBJ_FUNCTION
 
 /* */
 
+static bool is_native(Value value) { return is_object_type(value, OBJ_NATIVE); }
+
+/* */
+
 static bool is_object_type(Value value, ObjectType type) {
   return ant_value.is_object(value) && get_type(value) == type;
 }
@@ -58,23 +65,24 @@ static Object *allocate_object(size_t size, ObjectType object_type) {
 static int32_t print_object(Value value, bool debug) {
 
   switch (get_type(value)) {
+
   case OBJ_STRING:
     return ant_string.print(ant_string.from_value(value), debug);
-    break;
+
    case OBJ_FUNCTION:
-    return ant_function.print(ant_function.from_value(value), debug);
-    break;
+    return ant_function.print(ant_function.from_value(value));
+
+   case OBJ_NATIVE:
+    return printf("<native fn>");
 
   default:
     fprintf(stderr, "Error: Attempted to print object of unkown type.\n");
     return 0;
-    break; // Unreachable
   }
-
-
 }
 
 static void free_object(Object *object) {
+
   switch (object->type) {
   case OBJ_STRING: {
    ObjectString* string = (ObjectString*)object;
@@ -88,6 +96,12 @@ static void free_object(Object *object) {
     FREE(ObjectFunction, func);
     break;
   }
+
+   case OBJ_NATIVE: {
+    ObjectNative* native = (ObjectNative*)object;
+    FREE(ObjectNative, native);
+    break;
+   }
 
    default:
    fprintf(stderr, "Error: Attempted to free object of unkown type: %d\n", object->type);
