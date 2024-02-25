@@ -3,6 +3,7 @@
 #include "functions.h"
 #include "strings.h"
 #include "var_mapping.h"
+#include "debug.h"
 
 #include <stdio.h>
 #include <stdlib.h>

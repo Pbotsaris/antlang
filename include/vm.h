@@ -19,7 +19,7 @@ typedef struct {
 }CallFrame;
 
 typedef struct VM{
-   Stack       stack;
+  // Stack       stack;
    Compiler    compiler;            
    ValueArray  globals;
    CallFrame   frames[OPTION_FRAMES_MAX];

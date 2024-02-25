@@ -74,7 +74,6 @@ ObjectString *get_variable_name(int32_t index){
     return NULL;
    }
 
-   Value nameValue = ant_value_array.at(&mapping.reverse_lookup, index);
-   return ant_string.from_value(nameValue);
+   Value name_value = ant_value_array.at(&mapping.reverse_lookup, index);
+   return ant_string.from_value(name_value);
 }
-

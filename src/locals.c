@@ -103,6 +103,10 @@ static void mark_initialized(LocalStack *stack){
 
 static int32_t print_local_name(LocalStack *stack, int32_t index){
 
+   if(index == LOCALS_NOT_FOUND || index == LOCALS_UNINITIALIZED || index > stack->count - 1){
+      return printf("Local{ N/A }");
+   }
+
    const char *name = stack->locals[index].name.start;
 
    //TODO: How to handle local function variables?

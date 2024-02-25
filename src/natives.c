@@ -1,9 +1,12 @@
 #include "natives.h"
 #include "var_mapping.h"
 #include "value_array.h"
+#include "stack.h"
 #include <stdio.h>
 #include <string.h>
 #include <time.h>
+
+#include <stdlib.h>
 
 //Table natives;
 
@@ -59,14 +62,14 @@ static void define_native_function(VM *vm, const char *name, NativeFunction func
    ObjectString *func_name    = ant_string.new(name, (int32_t)strlen(name));
    ObjectNative *native_func  = ant_native.new(func);
 
-   ant_stack.push(&vm->stack, ant_value.from_object(ant_string.as_object(func_name)));
-   ant_stack.push(&vm->stack, ant_value.from_object(ant_native.as_object(native_func)));
+   STACK_PUSH(ant_value.from_object(ant_string.as_object(func_name)));
+   STACK_PUSH(ant_value.from_object(ant_native.as_object(native_func)));
 
    int32_t global_index = ant_value.as_number(ant_mapping.add(func_name));
-   ant_value_array.write_at(&vm->globals,  vm->stack.slots[1], global_index);
-
-   ant_stack.pop(&vm->stack);
-   ant_stack.pop(&vm->stack);
+   ant_value_array.write_at(&vm->globals, STACK_AT(1), global_index);
+   
+   STACK_POP();
+   STACK_POP();
 }
 
 /* Native Functions */
@@ -74,8 +77,3 @@ static void define_native_function(VM *vm, const char *name, NativeFunction func
 static Value native_clock(int32_t arg_count, Value *args){
    return ant_value.from_number((double)clock()/CLOCKS_PER_SEC);
 }
-
-
-
-
-

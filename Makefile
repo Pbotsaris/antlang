@@ -29,7 +29,7 @@ valgrind-gdb: $(VALGRIND_TARGET)
 	valgrind --leak-check=full --show-leak-kinds=all --track-origins=yes --vgdb=yes --vgdb-error=0 ./$(VALGRIND_TARGET) $(ARGS)
 
 profile: $(PROFILE_TARGET)
-	./$(PROFILE_TARGET) $(ARGS)
+	./$(PROFILE_TARGET) $(ARGS); gprof $(PROFILE_TARGET) gmon.out > analysis.txt
 
 run: $(TARGET)
 	./$(TARGET)

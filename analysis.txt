@@ -1,0 +1,66 @@
+Flat profile:
+
+Each sample counts as 0.01 seconds.
+  %   cumulative   self              self     total           
+ time   seconds   seconds    calls  Ts/call  Ts/call  name    
+ 63.51      2.47     2.47                             run
+  4.89      2.66     0.19                             value_to_number
+  3.60      2.80     0.14                             is_numeric_binary_op
+  3.09      2.92     0.12                             call
+  2.96      3.04     0.12                             value_from_bool
+  2.31      3.13     0.09                             call_value
+  2.06      3.21     0.08                             is_string_binary_op
+  1.93      3.28     0.08                             find_at
+  1.80      3.35     0.07                             is_undefined
+  1.54      3.41     0.06                             is_number
+  1.54      3.47     0.06                             is_object_type
+  1.54      3.53     0.06                             value_from_number
+  1.29      3.58     0.05                             read_16bit_operand
+  1.16      3.63     0.05                             is_object
+  1.03      3.67     0.04                             is_falsey_bool
+  1.03      3.71     0.04                             value_from_undefined
+  0.77      3.74     0.03                             get_type
+  0.77      3.77     0.03                             is_string
+  0.77      3.80     0.03                             value_to_object
+  0.39      3.81     0.02                             function_from_value
+  0.39      3.83     0.02                             is_bool
+  0.39      3.84     0.02                             write_value_at
+  0.26      3.85     0.01                             is_falsey
+  0.26      3.86     0.01                             is_nil
+  0.26      3.87     0.01                             new_vm
+  0.26      3.88     0.01                             value_to_bool
+  0.13      3.89     0.01                             new_function
+  0.13      3.89     0.01                             write_undefined
+
+ %         the percentage of the total running time of the
+time       program used by this function.
+
+cumulative a running sum of the number of seconds accounted
+ seconds   for by this function and those listed above it.
+
+ self      the number of seconds accounted for by this
+seconds    function alone.  This is the major sort for this
+           listing.
+
+calls      the number of times this function was invoked, if
+           this function is profiled, else blank.
+
+ self      the average number of milliseconds spent in this
+ms/call    function per call, if this function is profiled,
+	   else blank.
+
+ total     the average number of milliseconds spent in this
+ms/call    function and its descendents per call, if this
+	   function is profiled, else blank.
+
+name       the name of the function.  This is the minor sort
+           for this listing. The index shows the location of
+	   the function in the gprof listing. If the index is
+	   in parenthesis it shows where it would appear in
+	   the gprof listing if it were to be printed.
+
+Copyright (C) 2012-2023 Free Software Foundation, Inc.
+
+Copying and distribution of this file, with or without modification,
+are permitted in any medium without royalty provided the copyright
+notice and this notice are preserved.
