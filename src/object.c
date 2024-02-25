@@ -12,6 +12,7 @@ static ObjectType get_type(Value value);
 static bool is_string(Value value);
 static bool is_function(Value value);
 static bool is_native(Value value);
+static bool is_closure(Value value);
 
 static bool is_object_type(Value value, ObjectType type);
 static int32_t print_object(Value value, bool debug);
@@ -24,6 +25,7 @@ ObjectAPI ant_object = {
     .is_string = is_string,
     .is_function = is_function,
     .is_native = is_native,
+    .is_closure = is_closure,
     .print = print_object,
     .allocate = allocate_object,
     .free = free_object,
@@ -38,14 +40,9 @@ static ObjectType get_type(Value value) {
 /* */
 
 static bool is_string(Value value) { return is_object_type(value, OBJ_STRING); }
-
-/* */
-
 static bool is_function(Value value) { return is_object_type(value, OBJ_FUNCTION); }
-
-/* */
-
 static bool is_native(Value value) { return is_object_type(value, OBJ_NATIVE); }
+static bool is_closure(Value value) { return is_object_type(value, OBJ_CLOSURE); }
 
 /* */
 
@@ -63,7 +60,6 @@ static Object *allocate_object(size_t size, ObjectType object_type) {
 /* */
 
 static int32_t print_object(Value value, bool debug) {
-
   switch (get_type(value)) {
 
   case OBJ_STRING:
@@ -74,6 +70,9 @@ static int32_t print_object(Value value, bool debug) {
 
    case OBJ_NATIVE:
     return printf("<native fn>");
+
+   case OBJ_CLOSURE:
+    return ant_function.print(ant_function.closure_from_value(value)->func);
 
   default:
     fprintf(stderr, "Error: Attempted to print object of unkown type.\n");
@@ -90,6 +89,7 @@ static void free_object(Object *object) {
    FREE(ObjectString, string);
    break;
   }
+
    case OBJ_FUNCTION:{
     ObjectFunction* func = (ObjectFunction*)object;
     ant_chunk.free(&func->chunk);
@@ -100,6 +100,12 @@ static void free_object(Object *object) {
    case OBJ_NATIVE: {
     ObjectNative* native = (ObjectNative*)object;
     FREE(ObjectNative, native);
+    break;
+   }
+
+   case OBJ_CLOSURE: {
+    ObjectClosure* closure = (ObjectClosure*)object;
+    FREE(ObjectClosure, closure);
     break;
    }
 

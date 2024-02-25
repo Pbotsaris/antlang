@@ -21,6 +21,8 @@ typedef enum {
   OP_LESS,               /* no operand */
   OP_PRINT,              /* no operand */
   OP_POP,                /* no operand */
+  OP_CLOSURE,            /*  8-bit operand */
+  OP_CLOSURE_LONG,       /* 24-bit operand */
   OP_CALL,               /* 8-bit operand  */
   OP_JUMP,               /* 16-bit operand */
   OP_JUMP_IF_FALSE,      /* 16-bit operand */
@@ -87,6 +89,7 @@ typedef struct AntChunk {
    * @returns the index of the constant in the chunk's constant array. If < 0, an error occurred.
    */
   bool (*write_constant)      (Chunk *chunk, Value value, int32_t line);
+  bool (*write_closure)       (Chunk *chunk, Value value, int32_t line);
   bool (*write_define_global) (Chunk *chunk, int32_t global_index, int32_t line);
   bool (*write_get_global)    (Chunk *chunk, int32_t global_index, int32_t line);
   bool (*write_set_global)    (Chunk *chunk, int32_t global_index, int32_t line);

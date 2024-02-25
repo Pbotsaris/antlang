@@ -179,6 +179,7 @@ static void patch_jump(Compiler *compiler, int32_t offset);
 
 /* Emitting */
 static void emit_constant(Compiler *compiler, Value value);
+static void emit_closure(Compiler *compiler, ObjectFunction *func);
 static void emit_variable(Compiler *compiler, int32_t index, Callback callback);
 static int32_t emit_jump(Compiler *compiler, uint8_t instruction);
 static void emit_loop(Compiler *compiler, int32_t loop_start);
@@ -609,7 +610,7 @@ static void compile_function(Compiler *parent_compiler, CompilationType type) {
 
   // we do not need to end the scope because the compilation ends here
   ObjectFunction *func = end_of_compilation(&func_compiler);
-  emit_constant(parent_compiler, ant_value.from_object(ant_function.as_object(func)));
+  emit_closure(parent_compiler, func);
 
   // func compiler returns the parser and scanner to the parent compiler
   parent_compiler->parser = func_compiler.parser;
@@ -1125,6 +1126,19 @@ static void emit_constant(Compiler *compiler, Value value) {
 
   if (!valid) {
     error(&compiler->parser, "Too many constants in one chunk.");
+  }
+}
+
+/**/
+
+static void emit_closure(Compiler *compiler, ObjectFunction *func){
+   int32_t line = compiler->parser.prev.line;
+   Value value = ant_value.from_object(ant_function.as_object(func));
+
+   bool valid = ant_chunk.write_closure(current_chunk(compiler), value, line);
+
+  if (!valid) {
+    error(&compiler->parser, "Too many closure constants in one chunk.");
   }
 }
 

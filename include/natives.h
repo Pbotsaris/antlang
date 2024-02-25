@@ -7,10 +7,10 @@
 
 typedef Value (*NativeFunction)(int32_t arg_count, Value *args);
 
-typedef struct {
+struct ObjectNative {
   Object object;
   NativeFunction func;
-} ObjectNative;
+};
 
 typedef struct {
    Object*        (*as_object)(ObjectNative *native);

@@ -17,6 +17,8 @@ typedef enum {
 typedef struct Object Object;
 typedef struct ObjectString ObjectString;
 typedef struct ObjectFunction ObjectFunction;
+typedef struct ObjectClosure ObjectClosure;
+typedef struct ObjectNative ObjectNative;
 
 /**
  * Represents a value in the Ant language.
@@ -60,21 +62,21 @@ typedef struct AntValue {
   int32_t (*print)        (Value value, bool debug);         
 } ValueAPI;
 
-#define VALUE_FROM_NUMBER(value)  ((Value){.type = VAL_NUMBER, .as.number = value})
-#define VALUE_FROM_BOOL(value)    ((Value){.type = VAL_BOOL, .as.boolean = value})
-#define VALUE_FROM_OBJECT(value)  ((Value){.type = VAL_OBJECT, .as.object = value})
-#define VALUE_FROM_NIL()          ((Value){.type = VAL_NIL, .as.number = 0 })
-#define VALUE_FROM_UNDEFINED()    ((Value){.type = VAL_UNDEFINED, .as.number = 0 })
-#define VALUE_AS_BOOL(value)      ((value).as.boolean)
-#define VALUE_AS_NUMBER(value)    ((value).as.number)
-#define VALUE_AS_OBJECT(value)    ((value).as.object)
-#define VALUE_IS_BOOL(value)      ((value).type == VAL_BOOL)
-#define VALUE_IS_NUMBER(value)    ((value).type == VAL_NUMBER)
-#define VALUE_IS_OBJECT(value)    ((value).type == VAL_OBJECT)
-#define VALUE_IS_NIL(value)       ((value).type == VAL_NIL)
-#define VALUE_IS_UNDEFINED(value) ((value).type == VAL_UNDEFINED)
-#define VALUE_IS_FALSEY(value)      (VALUE_FROM_BOOL(VALUE_IS_NIL(value) || (VALUE_IS_BOOL(value) && !(VALUE_AS_BOOL(value)))))
-#define VALUE_IS_FALSEY_AS_BOOL(value) (VALUE_IS_NIL(value) || (VALUE_IS_BOOL(value) && !(VALUE_AS_BOOL(value))))
+#define VALUE_FROM_NUMBER(value)      ((Value){.type = VAL_NUMBER, .as.number = value})
+#define VALUE_FROM_BOOL(value)        ((Value){.type = VAL_BOOL, .as.boolean = value})
+#define VALUE_FROM_OBJECT(value)      ((Value){.type = VAL_OBJECT, .as.object = value})
+#define VALUE_FROM_NIL()              ((Value){.type = VAL_NIL, .as.number = 0 })
+#define VALUE_FROM_UNDEFINED()        ((Value){.type = VAL_UNDEFINED, .as.number = 0 })
+#define VALUE_AS_BOOL(value)          ((value).as.boolean)
+#define VALUE_AS_NUMBER(value)        ((value).as.number)
+#define VALUE_AS_OBJECT(value)        ((value).as.object)
+#define VALUE_IS_BOOL(value)          ((value).type == VAL_BOOL)
+#define VALUE_IS_NUMBER(value)        ((value).type == VAL_NUMBER)
+#define VALUE_IS_OBJECT(value)        ((value).type == VAL_OBJECT)
+#define VALUE_IS_NIL(value)           ((value).type == VAL_NIL)
+#define VALUE_IS_UNDEFINED(value)     ((value).type == VAL_UNDEFINED)
+#define VALUE_IS_FALSEY(value)        (VALUE_FROM_BOOL(VALUE_IS_NIL(value) || (VALUE_IS_BOOL(value) && !(VALUE_AS_BOOL(value)))))
+#define VALUE_IS_FALSEY_AS_BOOL(value)(VALUE_IS_NIL(value) || (VALUE_IS_BOOL(value) && !(VALUE_AS_BOOL(value))))
 
 #define VALUE_EQUALS(a, b) \
   ((a).type != (b).type ? VALUE_FROM_BOOL(false) : \

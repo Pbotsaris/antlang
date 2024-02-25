@@ -19,6 +19,7 @@ static bool patch_chunk_16(Chunk *chunk, int32_t offset, int32_t value);
 static void free_chunk(Chunk *chunk);
 static int32_t add_constant(Chunk *chunk, Value value);
 static bool write_constant(Chunk *chunk, Value value, int32_t line);
+static bool write_closure(Chunk *chunk, Value value, int32_t line);
 
 static bool write_define_global(Chunk *chunk, int32_t global_index, int32_t line);
 static bool write_get_global(Chunk *chunk, int32_t global_index, int32_t line);
@@ -34,6 +35,7 @@ AntChunkAPI ant_chunk = {
     .free = free_chunk,
     .add_constant = add_constant,
     .write_constant = write_constant,
+    .write_closure = write_closure,
     .write_define_global = write_define_global,
     .write_get_global = write_get_global,
     .write_set_global = write_set_global,
@@ -113,6 +115,20 @@ static bool write_constant(Chunk *chunk, Value constant, int32_t line) {
       .op_24bit = OP_CONSTANT_LONG,
       .line = line,
       .index = constant_index,
+  };
+
+  return write_chunk_with_operand(chunk, args);
+}
+
+static bool write_closure(Chunk *chunk, Value value, int32_t line) {
+   int32_t const_index = chunk->constants.count;
+   ant_value_array.write(&chunk->constants, value);
+
+  WithOperandArgs args = {
+      .op_8bit = OP_CLOSURE,
+      .op_24bit = OP_CLOSURE_LONG,
+      .line = line,
+      .index = const_index,
   };
 
   return write_chunk_with_operand(chunk, args);

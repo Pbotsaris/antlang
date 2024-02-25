@@ -13,7 +13,7 @@ typedef enum {
 
 
 typedef struct {
-   ObjectFunction* func;  /* function being called */
+   ObjectClosure*  closure;  /* All functions are closures */
    Value*          slots; /* first slot of the call frame */
    uint8_t*        ip;    /* return address */
 }CallFrame;

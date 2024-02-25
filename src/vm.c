@@ -35,7 +35,7 @@ static void runtime_error(VM *vm, const char *format, ...);
 
 /* functions */
 static bool call_value(VM *vm, Value callee, int32_t arg_count);
-static bool call(VM* vm, ObjectFunction *func, int32_t arg_count);
+static bool call(VM* vm, ObjectClosure *closure, int32_t arg_count);
 
 /* Implementation */
 static VM *new_vm() {
@@ -71,8 +71,12 @@ static InterpretResult interpret(VM *vm, const char *source) {
      note that in locals.c:init_local_stack, we claim the slot 0 for the VM for this purpose 
    */
   STACK_PUSH(VALUE_FROM_OBJECT(FUNCTION_AS_OBJECT(main_func)));
-  call(vm, main_func, 0);
+  STACK_POP(); // push pop silliness for the GC
+               
+  ObjectClosure *closure = ant_function.new_closure(main_func);
+  STACK_PUSH(VALUE_FROM_OBJECT(FUNCTION_CLOSURE_AS_OBJECT(closure)));
 
+  call(vm, closure, 0);
   return run(vm);
 }
 
@@ -125,12 +129,12 @@ static InterpretResult run(VM *vm) {
    register uint8_t *ip = frame->ip;
 
 #define READ_CHUNK_BYTE() (*ip++)
-#define READ_CHUNK_CONSTANT() (frame->func->chunk.constants.values[READ_CHUNK_BYTE()])
-#define READ_CHUNK_LONG_CONSTANT() (frame>func->chunk.constants.values[READ_24BIT_OPERANDS()])
+#define READ_CHUNK_CONSTANT() (frame->closure->func->chunk.constants.values[READ_CHUNK_BYTE()])
+#define READ_CHUNK_LONG_CONSTANT() (frame->closure->func->chunk.constants.values[READ_24BIT_OPERANDS()])
 
 #define READ_24BIT_OPERANDS() ({                                     \
            ip += CONST_24BITS;                                       \
-    ((ip[-3] << 16) | (ip[-2] << 8) | ip[-1]);                       \
+    (int)((ip[-3] << 16) | (ip[-2] << 8) | ip[-1]);                       \
 })
 
 #define READ_16BIT_OPERANDS() ({                                     \
@@ -167,8 +171,8 @@ static InterpretResult run(VM *vm) {
 
 #ifdef DEBUG_TRACE_EXECUTION
     /* address to index, get the relative offset */
-    int32_t offset = (int32_t)(ip - frame->func->chunk.code);
-    ant_debug.disassemble_instruction(&vm->compiler, &frame->func->chunk, offset);
+    int32_t offset = (int32_t)(ip - frame->closure->func->chunk.code);
+    ant_debug.disassemble_instruction(&vm->compiler, &frame->closure->func->chunk, offset);
     print_stack();
 #endif
 
@@ -205,7 +209,7 @@ static InterpretResult run(VM *vm) {
     case OP_CALL: {
       int32_t arg_count = (int32_t)READ_CHUNK_BYTE();
       frame->ip = ip; // sync frame ip with ip
-                      //
+                      
       /* note how arg_count will be the number of arguments on the stack. we grab the last one */
       if(!call_value(vm, STACK_PEEK(arg_count), arg_count)){
          return INTERPRET_RUNTIME_ERROR;
@@ -216,8 +220,25 @@ static InterpretResult run(VM *vm) {
       break;
    }
 
-    case OP_RETURN:{
+   case OP_CLOSURE: {
 
+      /* closures are like special case constant, the same but with some pre-processing 
+       * before pushing it to the stack 
+       * */
+      ObjectFunction *func = FUNCTION_FROM_VALUE(READ_CHUNK_CONSTANT());
+      ObjectClosure *closure = ant_function.new_closure(func);
+      STACK_PUSH(VALUE_FROM_OBJECT(FUNCTION_CLOSURE_AS_OBJECT(closure)));
+      break;
+   }
+
+  case OP_CLOSURE_LONG: {
+      ObjectFunction *func = FUNCTION_FROM_VALUE(READ_CHUNK_LONG_CONSTANT());
+      ObjectClosure *closure = ant_function.new_closure(func);
+      STACK_PUSH(VALUE_FROM_OBJECT(FUNCTION_CLOSURE_AS_OBJECT(closure)));
+      break;
+   }
+
+    case OP_RETURN:{
          Value result = STACK_POP();
          vm->frame_count--;
          
@@ -455,8 +476,7 @@ static InterpretResult run(VM *vm) {
     }
 
     case OP_CONSTANT_LONG: {
-      double constant = (double)READ_24BIT_OPERANDS();
-      STACK_PUSH(ant_value.from_number(constant));
+      STACK_PUSH(READ_CHUNK_LONG_CONSTANT());
       break;
     }
     }
@@ -476,11 +496,17 @@ static InterpretResult run(VM *vm) {
 static bool call_value(VM *vm, Value callee, int32_t arg_count) {
    if(ant_value.is_object(callee)){
       switch(ant_object.type(callee)){
+
          case OBJ_FUNCTION:
-            return call(vm, ant_function.from_value(callee), arg_count);
+            runtime_error(vm, "Functions are always type OBJ_CLOSURE.");
+            return false;
+
+         case OBJ_CLOSURE: 
+            return call(vm, FUNCTION_CLOSURE_FROM_VALUE(callee), arg_count);
+            
+
 
          case OBJ_NATIVE:{
-
             ObjectNative *native = ant_native.from_value(callee);
             Value result         = native->func(arg_count, STACK_TOP() - arg_count);
 
@@ -499,10 +525,10 @@ static bool call_value(VM *vm, Value callee, int32_t arg_count) {
 
 /* */
 
-static bool call(VM *vm, ObjectFunction *func, int32_t arg_count) {
+static bool call(VM *vm, ObjectClosure *closure, int32_t arg_count) {
 
-   if(arg_count != func->arity){
-      runtime_error(vm, "Expected %d arguments but got %d", func->arity, arg_count);
+   if(arg_count != closure->func->arity){
+      runtime_error(vm, "Expected %d arguments but got %d", closure->func->arity, arg_count);
       return false;
    }
 
@@ -519,8 +545,8 @@ static bool call(VM *vm, ObjectFunction *func, int32_t arg_count) {
     */
 
    CallFrame *frame = vm->frames + vm->frame_count; // next frame
-   frame->func = func;
-   frame->ip = func->chunk.code;
+   frame->closure = closure;
+   frame->ip = closure->func->chunk.code;
    // position the slots to be just below the arguments, on function call
    // -1 is to account for stack slot 0 which is reserved for the VM/method calls.
    frame->slots = STACK_TOP() - arg_count - 1;
@@ -539,10 +565,10 @@ static void runtime_error(VM *vm, const char *format, ...) {
 
     CallFrame *frame = &vm->frames[i];
 
-    ObjectFunction *func = frame->func;
+    ObjectFunction *func = frame->closure->func;
     /* -1 because interpreter is one step ahead when error occurs */
-    size_t instruction   = frame->ip - frame->func->chunk.code - 1;  
-    int32_t line         = ant_line.get(&frame->func->chunk.lines, instruction);
+    size_t instruction   = frame->ip - frame->closure->func->chunk.code - 1;  
+    int32_t line         = ant_line.get(&frame->closure->func->chunk.lines, instruction);
 
     fprintf(stderr, "[line %d] in ", line);
    

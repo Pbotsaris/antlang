@@ -162,6 +162,10 @@ static int32_t disassemble_instruction(Compiler *compiler, Chunk *frame_chunk, i
   case OP_CALL:
     return print_byte_instruction("OP_CALL", frame_chunk, offset);
 
+   case OP_CLOSURE:
+    offset++;
+    return print_constant_instruction("OP_CLOSURE", frame_chunk, offset);
+
   case OP_DEFINE_GLOBAL:
     return print_global_instruction("OP_DEFINE_GLOBAL", frame_chunk, offset);
 
