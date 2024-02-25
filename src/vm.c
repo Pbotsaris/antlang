@@ -38,12 +38,6 @@ static void runtime_error(VM *vm, const char *format, ...);
 static bool call_value(VM *vm, Value callee, int32_t arg_count);
 static bool call(VM* vm, ObjectFunction *func, int32_t arg_count);
 
-/* OP Helpers */
-static int32_t read_24bit_operand(VM *vm);
-static uint16_t read_16bit_operand(VM *vm);
-static bool is_numeric_binary_op(VM *vm);
-static bool is_string_binary_op(VM *vm);
-
 /* Implementation */
 static VM *new_vm() {
   VM *vm = (VM *)malloc(sizeof(VM));
@@ -133,11 +127,33 @@ static InterpretResult run(VM *vm) {
 #define READ_CHUNK_BYTE() (*frame->ip++)
 #define READ_CHUNK_CONSTANT() (frame->func->chunk.constants.values[READ_CHUNK_BYTE()])
 #define READ_CHUNK_LONG_CONSTANT()                                             \
-  (frame>func->chunk.constants.values[read_24bit_operand(vm)])
+  (frame>func->chunk.constants.values[READ_24BIT_OPERANDS(vm)])
+
+#define READ_24BIT_OPERANDS(vm) ({ \
+    CallFrame* frame = (vm)->frames + (vm)->frame_count - 1; \
+    frame->ip += CONST_24BITS; \
+    ((frame->ip[-3] << 16) | (frame->ip[-2] << 8) | frame->ip[-1]); \
+})
+
+#define READ_16BIT_OPERANDS(vm) ({ \
+    CallFrame* frame = (vm)->frames + (vm)->frame_count - 1; \
+    frame->ip += CONST_16BITS; \
+    (uint16_t)((frame->ip[-2] << 8) | frame->ip[-1]); \
+})
+
+#define IS_NUMERIC_BINARY_OP() ( \
+    ant_value.is_number(STACK_PEEK(0)) && \
+    ant_value.is_number(STACK_PEEK(1)) \
+)
+
+#define IS_STRING_BINARY_OP() ( \
+    ant_object.is_string(STACK_PEEK(0)) && \
+    ant_object.is_string(STACK_PEEK(1)) \
+)
 
 #define BINARY_OP(value_type, op)                                              \
   do {                                                                         \
-    if (!is_numeric_binary_op(vm)) {                                           \
+    if (!IS_NUMERIC_BINARY_OP()) {                                           \
       runtime_error(vm, "Operands must be numbers");                           \
       return INTERPRET_RUNTIME_ERROR;                                          \
     }                                                                          \
@@ -153,7 +169,6 @@ static InterpretResult run(VM *vm) {
   for (;;) {
 
 #ifdef DEBUG_TRACE_EXECUTION
-    
     /* address to index, get the relative offset */
     int32_t offset = (int32_t)(frame->ip - frame->func->chunk.code);
     ant_debug.disassemble_instruction(&vm->compiler, &frame->func->chunk, offset);
@@ -164,14 +179,14 @@ static InterpretResult run(VM *vm) {
     switch ((instruction = READ_CHUNK_BYTE())) {
 
     case OP_JUMP: {
-      uint16_t offset = read_16bit_operand(vm);
+      uint16_t offset = READ_16BIT_OPERANDS(vm);
       frame->ip += offset;
       break;
     }
 
     /* flow control purposefully on top */
     case OP_JUMP_IF_FALSE: {
-      uint16_t offset = read_16bit_operand(vm);
+      uint16_t offset = READ_16BIT_OPERANDS(vm);
 
       if (ant_value.is_falsey_bool(STACK_PEEK(0))) {
         frame->ip += offset;
@@ -181,7 +196,7 @@ static InterpretResult run(VM *vm) {
     }
 
     case OP_LOOP: {
-      uint16_t offset = read_16bit_operand(vm);
+      uint16_t offset = READ_16BIT_OPERANDS(vm);
       frame->ip -= offset;
       break;
     }
@@ -248,7 +263,7 @@ static InterpretResult run(VM *vm) {
       break;
 
     case OP_ADD: {
-      if (is_string_binary_op(vm)) {
+      if (IS_STRING_BINARY_OP()) {
         Value b = STACK_POP();
         Value a = STACK_POP();
         ObjectString *str = ant_string.concat(a, b);
@@ -331,7 +346,7 @@ static InterpretResult run(VM *vm) {
     }
 
     case OP_GET_LOCAL_LONG: {
-      int32_t index = read_24bit_operand(vm);
+      int32_t index = READ_24BIT_OPERANDS(vm);
 
       if (STACK_OVERFLOW(index)) {
         runtime_error(vm, "OP_GET_LOCAL_LONG: Stack overflow at index %d", index);
@@ -354,7 +369,7 @@ static InterpretResult run(VM *vm) {
     }
 
     case OP_SET_LOCAL_LONG: {
-      int32_t index = read_24bit_operand(vm);
+      int32_t index = READ_24BIT_OPERANDS(vm);
 
       if (STACK_OVERFLOW(index)) {
         runtime_error(vm, "OP_SET_LOCAL_LONG: Stack overflow at index %d", index);
@@ -372,7 +387,7 @@ static InterpretResult run(VM *vm) {
     }
 
     case OP_DEFINE_GLOBAL_LONG: {
-      int32_t global_index = read_24bit_operand(vm);
+      int32_t global_index = READ_24BIT_OPERANDS(vm);
       ant_value_array.write_at(&vm->globals, STACK_POP(), global_index);
       break;
     }
@@ -391,7 +406,7 @@ static InterpretResult run(VM *vm) {
     }
 
     case OP_GET_GLOBAL_LONG: {
-      int32_t global_index = read_24bit_operand(vm);
+      int32_t global_index = READ_24BIT_OPERANDS(vm);
       Value value = ant_value_array.at(&vm->globals, global_index);
 
       if (ant_value.is_undefined(value)) {
@@ -420,7 +435,7 @@ static InterpretResult run(VM *vm) {
     }
 
     case OP_SET_GLOBAL_LONG: {
-      int32_t global_index = read_24bit_operand(vm);
+      int32_t global_index = READ_24BIT_OPERANDS(vm);
       Value value = ant_value_array.at(&vm->globals, global_index);
 
       if (ant_value.is_undefined(value)) {
@@ -437,7 +452,7 @@ static InterpretResult run(VM *vm) {
       break;
 
     case OP_CONSTANT_LONG: {
-      double constant = (double)read_24bit_operand(vm);
+      double constant = (double)READ_24BIT_OPERANDS(vm);
       STACK_PUSH(ant_value.from_number(constant));
       break;
     }
@@ -446,6 +461,8 @@ static InterpretResult run(VM *vm) {
 #undef READ_CHUNK_BYTE
 #undef READ_CHUNK_CONSTANT
 #undef BINARY_OP
+#undef READ_24BIT_OPERANDS
+#undef READ_16BIT_OPERANDS
   }
 }
 
@@ -465,7 +482,6 @@ static bool call_value(VM *vm, Value callee, int32_t arg_count) {
             STACK_PUSH(result);
             return true;
          }
-
          default:
             break; // non-callable object
       }
@@ -506,19 +522,19 @@ static bool call(VM *vm, ObjectFunction *func, int32_t arg_count) {
    return true;
 }
 
-static int32_t read_24bit_operand(VM *vm) {
-  CallFrame *frame = vm->frames + vm->frame_count -1;
-  frame->ip += CONST_24BITS;
-  return (frame->ip[-3] << 16) | (frame->ip[-2] << 8) | (frame->ip[-1]);
-}
+//static int32_t READ_24BIT_OPERANDS(VM *vm) {
+//  CallFrame *frame = vm->frames + vm->frame_count -1;
+//  frame->ip += CONST_24BITS;
+//  return (frame->ip[-3] << 16) | (frame->ip[-2] << 8) | (frame->ip[-1]);
+//}
 
 /**/
-static uint16_t read_16bit_operand(VM *vm) {
-   CallFrame *frame = vm->frames + vm->frame_count -1;
-
-  frame->ip += CONST_16BITS;
-  return (uint16_t)(frame->ip[-2] << 8 | frame->ip[-1]);
-}
+//static uint16_t READ_16BIT_OPERANDS(VM *vm) {
+//   CallFrame *frame = vm->frames + vm->frame_count -1;
+//
+//  frame->ip += CONST_16BITS;
+//  return (uint16_t)(frame->ip[-2] << 8 | frame->ip[-1]);
+//}
 
 /**/
 
@@ -552,16 +568,3 @@ static void runtime_error(VM *vm, const char *format, ...) {
   STACK_RESET();
 }
 
-/**/
-
-static bool is_numeric_binary_op(VM *vm) {
-  return ant_value.is_number(STACK_PEEK(0)) &&
-         ant_value.is_number(STACK_PEEK(1));
-}
-
-/**/
-
-static bool is_string_binary_op(VM *vm) {
-  return ant_object.is_string(STACK_PEEK(0)) &&
-         ant_object.is_string(STACK_PEEK(1));
-}

@@ -6,8 +6,8 @@
 #include "config.h"
 
 /* NOTE:
- * Stack operations are extremely performance sensitive so the have use of macros
- * to avoid function call overhead.
+ * Stack operations are extremely performance
+ * macro use is toto avoid function call overhead.
  */
 
 typedef struct {
@@ -16,6 +16,7 @@ typedef struct {
 } Stack;
 
 extern Stack stack;
+void print_stack(void);
 
 #define STACK_PUSH(value) do { \
     if ((stack.top - stack.slots) >= OPTION_STACK_MAX) { \
@@ -31,24 +32,12 @@ extern Stack stack;
         (*--stack.top) \
 )
 
-
-void print_stack(void);
-
 #define STACK_PEEK(distance) (*(stack.top - 1 - (distance)))
-
 #define STACK_RESET() (stack.top = stack.slots)
-
 #define STACK_SET_TOP(top) (stack.top = (top))
-
 #define STACK_TOP() (stack.top)
-
 #define STACK_DECREMENT_TOP(by) (stack.top -= (by))
-
 #define STACK_OVERFLOW(index) (stack.slots == stack.top || (index) == OPTION_STACK_MAX || stack.top < &stack.slots[(index)])
-
 #define STACK_AT(index) (stack.slots[(index)])
-
 #define STACK_PRINT() print_stack()
-//const extern StackAPI ant_stack;
-
 #endif

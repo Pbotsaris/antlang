@@ -5,10 +5,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <time.h>
-
 #include <stdlib.h>
-
-//Table natives;
 
 static ObjectNative*   new_native(NativeFunction func);
 static int32_t         print_native(void);
