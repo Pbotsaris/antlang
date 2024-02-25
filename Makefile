@@ -5,9 +5,13 @@ BIN=bin
 CFLAGS +=-W  -Wall -Wextra -g3 -Iinclude
 LDFLAGS +=-fsanitize=address
 
+PROFILE_FLAGS=-pg
+OPTIMIZATION_FLAGS=-O2
+
 CC=clang
 TARGET=${BIN}/ant
 VALGRIND_TARGET=${BIN}/ant_valgrind
+PROFILE_TARGET=${BIN}/ant_profile
 
 $(shell mkdir -p obj bin)
 
@@ -24,6 +28,9 @@ valgrind: $(VALGRIND_TARGET)
 valgrind-gdb: $(VALGRIND_TARGET)
 	valgrind --leak-check=full --show-leak-kinds=all --track-origins=yes --vgdb=yes --vgdb-error=0 ./$(VALGRIND_TARGET) $(ARGS)
 
+profile: $(PROFILE_TARGET)
+	./$(PROFILE_TARGET) $(ARGS)
+
 run: $(TARGET)
 	./$(TARGET)
 
@@ -32,6 +39,9 @@ $(TARGET): $(OBJS)
 
 $(VALGRIND_TARGET): $(OBJS)
 	$(CC) -o $(VALGRIND_TARGET) $(OBJS) $(CFLAGS)
+
+$(PROFILE_TARGET): $(OBJS)
+	$(CC) -o $(PROFILE_TARGET) $(OBJS) $(PROFILE_FLAGS) $(OPTIMIZATION_FLAGS)
 
 $(OBJ)/%.o: $(SRC)/%.c
 	$(CC) $(CFLAGS) -c $< -o $@ 

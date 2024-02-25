@@ -2,7 +2,6 @@
 #include "chunk.h"
 #include "common.h"
 #include "config.h"
-#include "debug.h"
 #include "lines.h"
 #include "memory.h"
 #include "object.h"
@@ -306,7 +305,7 @@ static InterpretResult run(VM *vm) {
     case OP_PRINT: {
       Value value = ant_stack.pop(&vm->stack);
       ant_value.print(value, false);
-      // printf("\n");
+      printf("\n");
       break;
     }
 

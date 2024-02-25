@@ -5,7 +5,7 @@
 
 /* Debugging */
 //#define DEBUG_PRINT_CODE
-#define DEBUG_TRACE_EXECUTION
+//#define DEBUG_TRACE_EXECUTION
 // #define DEBUG_TRACE_PARSER
 // Requires DEBUG_TRACE_PARSER will trace tokens
 // #define DEBUG_TRACE_PARSER_VERBOSE 
