@@ -1,0 +1,41 @@
+
+// why is this underflowing?
+ant> let a = 10; { let b = 10; print b; }
+
+== execution ==
+0000    1 OP_CONSTANT         0:10                                  [<script>]
+0002    | OP_DEFINE_GLOBAL    1:Global {'a'}                        [<script>][10]
+0004    | OP_CONSTANT         1:10                                  [<script>]
+0006    | OP_GET_LOCAL        1:Local{ N/A }                        [<script>][10]
+0008    | OP_PRINT                                                  [<script>][10][10]
+10
+0009    | OP_POP                                                    [<script>][10]
+0010    | OP_POP                                                    [<script>]
+0011    2 OP_NIL                                                    []
+0012    | OP_RETURN                                                 [nil]
+Stack underflow
+
+there could be an issue with the way end_scope is working without a enclosing function:
+
+  while (stack->count > 0 &&
+         stack->locals[stack->count - 1].depth == stack->depth) {
+    emit_byte(compiler, OP_POP);
+    stack->count--;
+  }
+}
+
+because we are saving stack->locals[0] for the function / script, when we don't have a function 
+this code will emit a pop anyways to pop the function 
+
+REPL issue:
+
+I had to reset the compiler in the repl. must find a better way
+
+    // FIX ME: this is a hack to reset the compiler state. look into a better way to do this
+    ant_compiler.init(&vm->compiler, COMPILATION_TYPE_SCRIPT);
+    interpret(vm, line);
+    printf("\n");
+
+
+
+

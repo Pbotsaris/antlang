@@ -3,7 +3,6 @@
 
 #include "compiler.h"
 #include "config.h"
-#include "stack.h"
 
 typedef enum {
    INTERPRET_OK,

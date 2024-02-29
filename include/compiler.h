@@ -3,6 +3,7 @@
 #include "scanner.h"
 #include "parser.h"
 #include "locals.h"
+#include "upvalues.h"
 #include "common.h"
 
 typedef enum {
@@ -30,9 +31,10 @@ typedef struct Compiler {
   Scanner scanner;
   Parser parser;
   LocalStack locals;
+  Upvalues upvalues;
   ObjectFunction *func;
   CompilationType type;
-
+  struct Compiler *enclosing;
 } Compiler;
 
 typedef struct AntCompiler {

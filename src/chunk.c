@@ -26,6 +26,8 @@ static bool write_get_global(Chunk *chunk, int32_t global_index, int32_t line);
 static bool write_set_global(Chunk *chunk, int32_t global_index, int32_t line);
 static bool write_set_local(Chunk *chunk, int32_t local_index, int32_t line);
 static bool write_get_local(Chunk *chunk, int32_t local_index, int32_t line);
+static bool write_set_upvalue(Chunk *chunk, int32_t upvalue_index, int32_t line);
+static bool write_get_upvalue(Chunk *chunk, int32_t upvalue_index, int32_t line);
 
 /* API */
 AntChunkAPI ant_chunk = {
@@ -41,6 +43,8 @@ AntChunkAPI ant_chunk = {
     .write_set_global = write_set_global,
     .write_set_local = write_set_local,
     .write_get_local = write_get_local,
+    .write_set_upvalue = write_set_upvalue,
+    .write_get_upvalue = write_get_upvalue,
 };
 
 /* Private */
@@ -64,8 +68,7 @@ static void write_chunk(Chunk *chunk, uint8_t byte, int32_t line) {
   if (chunk->capacity < chunk->count + 1) {
     size_t old_capacity = chunk->capacity;
     chunk->capacity = GROW_CAPACITY(old_capacity);
-    chunk->code =
-        GROW_ARRAY(uint8_t, chunk->code, old_capacity, chunk->capacity);
+    chunk->code = GROW_ARRAY(uint8_t, chunk->code, old_capacity, chunk->capacity);
   }
 
   chunk->code[chunk->count] = byte;
@@ -203,6 +206,21 @@ static bool write_get_local(Chunk *chunk, int32_t local_index, int32_t line){
    return write_chunk_with_operand(chunk, args);
 }
 
+
+// TODO: For now upvalue and closure only support 8bits operands
+// in order to make them work with 24bits operands we need to change
+// the OP_CLOSURE instruction so that in the pair [is_local, index], the index can be a 24bits operands
+static bool write_set_upvalue(Chunk *chunk, int32_t upvalue_index, int32_t line){
+   write_chunk(chunk, OP_SET_UPVALUE, line);
+   write_chunk(chunk, (uint8_t)upvalue_index, line);
+   return true;
+}
+
+static bool write_get_upvalue(Chunk *chunk, int32_t upvalue_index, int32_t line){
+   write_chunk(chunk, OP_GET_UPVALUE, line);
+   write_chunk(chunk, (uint8_t)upvalue_index, line);
+   return true;
+}
 
 
 /* Private */

@@ -48,6 +48,13 @@ static int32_t trace_depth = 0;
 // write global variable callback
 typedef bool (*Callback)(Chunk *chunk, int32_t const_index, int32_t line);
 
+typedef enum {
+   VAR_RESOLVES_GLOBAL,
+   VAR_RESOLVES_LOCAL,
+   VAR_RESOLVES_UPVALUE,
+   VAR_RESOLVES_ERROR,
+}VarResolution;
+
 /* Public */
 static void init_compiler(Compiler *compiler, CompilationType type);
 static ObjectFunction *compile(Compiler *compiler, const char *source);
@@ -77,7 +84,7 @@ static void expression(Compiler *compiler);
 
 /* functions */
 static void compile_function(Compiler *parent_compiler, CompilationType type);
-static void function_params(Compiler *compiler);
+static void parse_function_indentifier_and_params(Compiler *compiler);
 
 /* rules */
 static void number(Compiler *compiler, bool can_assign);
@@ -159,6 +166,8 @@ static void define_global_variable(Compiler *compiler, int32_t index);
 static void define_local_variable(Compiler *compiler);
 static void declare_local_variable(Compiler *compiler);
 static void named_variable(Compiler *compiler, Token name, bool can_assign);
+static VarResolution resolve_variable_scope(Compiler *compiler, Token *name, int32_t *var_index);
+static int32_t resolve_upvalue(Compiler *compiler, Token *name);
 static int32_t parse_variable(Compiler *compiler, const char *message);
 static int32_t make_global_identifier(Compiler *compiler, Token *token);
 
@@ -179,7 +188,7 @@ static void patch_jump(Compiler *compiler, int32_t offset);
 
 /* Emitting */
 static void emit_constant(Compiler *compiler, Value value);
-static void emit_closure(Compiler *compiler, ObjectFunction *func);
+static void emit_closure(Compiler *compiler, Compiler *func_compiler, ObjectFunction *func);
 static void emit_variable(Compiler *compiler, int32_t index, Callback callback);
 static int32_t emit_jump(Compiler *compiler, uint8_t instruction);
 static void emit_loop(Compiler *compiler, int32_t loop_start);
@@ -188,6 +197,8 @@ static void emit_byte(Compiler *compiler, uint8_t byte);
 static void emit_two_bytes(Compiler *compiler, uint8_t byte1, uint8_t byte2);
 
 /* error handling */
+static void error_locals_not_initialized(Compiler *compiler);
+static int32_t report_on_error(Compiler *compiler, int32_t type);
 static void error_at(Parser *parser, const char *message);
 static void error(Parser *parser, const char *message);
 static void errorf(Parser *parser, const char *format, ...);
@@ -200,16 +211,19 @@ static bool match(Compiler *compiler, TokenType type);
 static bool check(Compiler *compiler, TokenType type);
 static ParseRule *get_rule(TokenType type);
 static bool is_global(int32_t local_index);
+static bool was_local_found(int32_t local_index);
 
 /* Compiler API */
 static void init_compiler(Compiler *compiler, CompilationType type) {
-  compiler->func = NULL;
-  compiler->type = type;
+  compiler->func      = NULL;
+  compiler->enclosing = NULL;
+  compiler->type      = type;
 
   /* scanner gets initialize on compile method */
   ant_parser.init(&compiler->parser);
   ant_locals.init(&compiler->locals);
   compiler->func = ant_function.new();
+  ant_upvalues.init(&compiler->upvalues, compiler->func);
 }
 
 /**/
@@ -271,11 +285,14 @@ static void function_declaration(Compiler *compiler) {
   if (scope == SCOPE_LOCAL) {
     define_local_variable(compiler);
   }
+
   compile_function(compiler, COMPILATION_TYPE_FUNC);
 
   if (scope == SCOPE_GLOBAL) {
     define_global_variable(compiler, global_index);
-  } else {
+  }
+
+  if (scope == SCOPE_INVALID) {
     error(&compiler->parser, "Invalid scope for function declaration.");
   }
 }
@@ -388,9 +405,7 @@ static void while_statement(Compiler *compiler) {
 
   int32_t exit_jump = emit_jump(
       compiler, OP_JUMP_IF_FALSE); // jump end of loop if condition is false
-  emit_byte(
-      compiler,
-      OP_POP); // otherwise we pop the stack and continue with next interation
+  emit_byte( compiler, OP_POP); // otherwise we pop the stack and continue with next interation
   statement(compiler); // body
   emit_loop(compiler, loop_start);
 
@@ -455,8 +470,7 @@ static void for_statement(Compiler *compiler) {
     int32_t increment_start = current_chunk(compiler)->count;
     expression(compiler);
     emit_byte(compiler, OP_POP);
-    consume(compiler, TOKEN_RIGHT_PAREN,
-            "Expected ')' after for loop condition");
+    consume(compiler, TOKEN_RIGHT_PAREN, "Expected ')' after for loop condition");
 
     emit_loop(compiler, loop_start);
     loop_start = increment_start;
@@ -590,6 +604,8 @@ static void compile_function(Compiler *parent_compiler, CompilationType type) {
 
   Compiler func_compiler;
   init_compiler(&func_compiler, type);
+  func_compiler.enclosing = parent_compiler;
+
   // the function compiler will move the parse and scanner along during function compilation
   func_compiler.parser = parent_compiler->parser;
   func_compiler.scanner = parent_compiler->scanner;
@@ -603,24 +619,25 @@ static void compile_function(Compiler *parent_compiler, CompilationType type) {
 
   begin_scope(&func_compiler);
   consume(&func_compiler, TOKEN_LEFT_PAREN, "Expected '(' after function name.");
-  function_params(&func_compiler);
+  parse_function_indentifier_and_params(&func_compiler);
   consume(&func_compiler, TOKEN_RIGHT_PAREN, "Expected ')' after function parameters.");
   consume(&func_compiler, TOKEN_LEFT_BRACE, "Expected '{' before function body.");
   block(&func_compiler);
 
   // we do not need to end the scope because the compilation ends here
   ObjectFunction *func = end_of_compilation(&func_compiler);
-  emit_closure(parent_compiler, func);
 
   // func compiler returns the parser and scanner to the parent compiler
   parent_compiler->parser = func_compiler.parser;
   parent_compiler->scanner = func_compiler.scanner;
+
+  emit_closure(parent_compiler, &func_compiler, func);
   TRACE_PARSER_EXIT();
 }
 
 /* */
 
-static void function_params(Compiler *compiler) {
+static void parse_function_indentifier_and_params(Compiler *compiler) {
   if (!check(compiler, TOKEN_RIGHT_PAREN)) {
     do {
       compiler->func->arity++;
@@ -637,8 +654,7 @@ static void function_params(Compiler *compiler) {
 /* */
 
 static void parse_pressedence(Compiler *compiler, Presedence presedence) {
-  TRACE_PARSER_ENTER("Compiler *compiler = %p, Presedence presedence = %s",
-                     compiler, precedence_name(presedence));
+  TRACE_PARSER_ENTER("Compiler *compiler = %p, Presedence presedence = %s", compiler, precedence_name(presedence));
   TRACE_PARSER_TOKEN(compiler->parser.prev, compiler->parser.current);
 
   next_token(compiler);
@@ -664,11 +680,10 @@ static void parse_pressedence(Compiler *compiler, Presedence presedence) {
     ParserFunc infix_rule = get_rule(prev_type)->infix;
 
     infix_rule(compiler, can_assign);
-    ;
+
   }
 
-  // variable did not consume = because it's not an assignment
-  // report an error
+  /* variable did not consume = because it's not an assignment */
   if (can_assign && match(compiler, TOKEN_EQUAL)) {
     error(&compiler->parser, "Invalid assignment target.");
   }
@@ -921,35 +936,115 @@ static void declare_local_variable(Compiler *compiler) {
 
 /* */
 
+// TODO: PEdro you must create the write set upvalue and write get upvalue functions :)
 static void named_variable(Compiler *compiler, Token name, bool can_assign) {
   TRACE_PARSER_ENTER("Compiler *compiler = %p", compiler);
   TRACE_PARSER_TOKEN(compiler->parser.prev, compiler->parser.current);
 
-  /* setting up for local or global variables */
+  int32_t var_index = LOCALS_NOT_INTIALIZED;
+  VarResolution resolution = resolve_variable_scope(compiler, &name, &var_index);
+  Callback get, set;
 
-  int32_t local = ant_locals.resolve(&compiler->locals, &name);
+  switch (resolution) {
+     case VAR_RESOLVES_GLOBAL:
+        get = ant_chunk.write_get_global;
+        set = ant_chunk.write_set_global;
+        break;
 
-  if (local == LOCALS_UNINITIALIZED) {
-    error(&compiler->parser, "Cannot read local variable in its own initializer.");
+     case VAR_RESOLVES_LOCAL:
+        get = ant_chunk.write_get_local;
+        set = ant_chunk.write_set_local;
+        break;
+
+      case VAR_RESOLVES_UPVALUE:
+        get = ant_chunk.write_get_upvalue;
+        set = ant_chunk.write_set_upvalue;
+        break;
+
+      case VAR_RESOLVES_ERROR:
+        return;
+
+      default:
+        error(&compiler->parser, "Invalid variable resolution.");
+        return;
   }
-
-
-  int32_t index =
-      is_global(local) ? make_global_identifier(compiler, &name) : local;
-  Callback get =
-      is_global(local) ? ant_chunk.write_get_global : ant_chunk.write_get_local;
-  Callback set =
-      is_global(local) ? ant_chunk.write_set_global : ant_chunk.write_set_local;
 
   if (can_assign && match(compiler, TOKEN_EQUAL)) {
     expression( compiler); // on assigment, parse the expression after the equal sign
-    emit_variable(compiler, index, set);
+    emit_variable(compiler, var_index, set);
 
   } else {
-    emit_variable(compiler, index, get);
+    emit_variable(compiler, var_index, get);
   }
 
   TRACE_PARSER_EXIT();
+}
+/* */
+static VarResolution resolve_variable_scope(Compiler *compiler, Token *name, int32_t *var_index){
+
+  /* attempt to resolve variable in the local scope */
+  int32_t local = ant_locals.resolve(&compiler->locals, name);
+
+  if(local == LOCALS_NOT_INTIALIZED){
+    error(&compiler->parser, "Cannot read local variable in its own initializer.");
+    return VAR_RESOLVES_ERROR;
+  }
+
+  if(was_local_found(local)){
+    *var_index = local;
+    return VAR_RESOLVES_LOCAL;
+  }
+
+  int32_t upvalue = resolve_upvalue(compiler, name);
+
+  if(upvalue == UPVALUE_REACHED_MAX || upvalue == UPVALUE_NOT_INITIALIZED){
+    return VAR_RESOLVES_ERROR;
+  }
+
+  if(was_local_found(upvalue)){
+    *var_index = upvalue;
+    return VAR_RESOLVES_UPVALUE;
+  }
+
+  // should I make a global? I don't think so!  if didn't resolve.. it's an error
+  *var_index = make_global_identifier(compiler, name);
+  return VAR_RESOLVES_GLOBAL;
+}
+
+/* Watch for the recursion  */
+
+int32_t resolve_upvalue(Compiler *compiler, Token *name) {
+   // if we are at the top level, we are not in a function
+  if (compiler->enclosing == NULL) {
+    return LOCALS_NOT_FOUND;
+  }
+
+   /* Recursively look for local variable in the enclosing function */
+  int32_t local = ant_locals.resolve(&compiler->enclosing->locals, name);
+
+  if(local == LOCALS_NOT_INTIALIZED){
+     error_locals_not_initialized(compiler);
+     return local;
+  }
+
+   // found it
+  if(was_local_found(local)){
+     return report_on_error(compiler, ant_upvalues.add(&compiler->enclosing->upvalues, (uint8_t)local, true));
+  }
+
+  /* recursively look for upvalues in the enclosing function */
+  int32_t upvalue = resolve_upvalue(compiler->enclosing, name);
+
+  /* post order traversal 
+   * adds will add the found upvalue to all funcs in the recursive chain 
+   * upvalue.is_local = false signifies that upvalue was found in immediate enclosing function
+   * */
+
+  if(was_local_found(upvalue)){
+     return report_on_error(compiler, ant_upvalues.add(&compiler->upvalues, (uint8_t)upvalue, false));
+  }
+
+  return LOCALS_NOT_FOUND;
 }
 
 /* */
@@ -1131,21 +1226,28 @@ static void emit_constant(Compiler *compiler, Value value) {
 
 /**/
 
-static void emit_closure(Compiler *compiler, ObjectFunction *func){
+static void emit_closure(Compiler *compiler, Compiler *func_compiler, ObjectFunction *func){
    int32_t line = compiler->parser.prev.line;
-   Value value = ant_value.from_object(ant_function.as_object(func));
-
-   bool valid = ant_chunk.write_closure(current_chunk(compiler), value, line);
+   Value value  = ant_value.from_object(ant_function.as_object(func));
+   bool valid   = ant_chunk.write_closure(current_chunk(compiler), value, line);
 
   if (!valid) {
     error(&compiler->parser, "Too many closure constants in one chunk.");
+  }
+
+  for(int32_t i = 0; i < func->upvalue_count; i++){
+     Upvalue upvalue =  func_compiler->upvalues.values[i];
+
+     printf("Upvalue index: %d, is_local: %d, for line: %d\n", upvalue.index, upvalue.is_local, line);
+
+     ant_chunk.write(current_chunk(compiler), upvalue.is_local ? 1 : 0, line);
+     ant_chunk.write(current_chunk(compiler), upvalue.index, line);
   }
 }
 
 /**/
 
-static void emit_variable(Compiler *compiler, int32_t index,
-                          Callback write_variable) {
+static void emit_variable(Compiler *compiler, int32_t index, Callback write_variable) {
 
   int32_t line = compiler->parser.prev.line;
   bool valid = write_variable(current_chunk(compiler), index, line);
@@ -1204,6 +1306,32 @@ static void emit_two_bytes(Compiler *compiler, uint8_t byte1, uint8_t byte2) {
 
 /* */
 
+static void error_locals_not_initialized(Compiler *compiler) {
+  char *func_name = compiler->func->name != NULL ? compiler->func->name->chars : "<script>";
+  errorf(&compiler->parser, "Locals in func '%s' not initlized.", func_name);
+}
+
+
+/* */
+int32_t report_on_error(Compiler *compiler, int32_t index) {
+   char *func_name = compiler->func->name != NULL ? compiler->func->name->chars : "<script>";
+
+  if (index == UPVALUE_NOT_INITIALIZED) {
+    report_on_error(compiler, UPVALUE_NOT_INITIALIZED);
+    errorf(&compiler->parser, "Upvalue structure was not initialized in func %s.", func_name);
+  }
+
+  if (index == UPVALUE_REACHED_MAX) {
+    errorf(&compiler->parser, "Upvalue structure from func %s reached max.", func_name);
+  }
+
+  return index;
+}
+
+
+
+/* */
+
 static void errorf(Parser *parser, const char *format, ...) {
   char message[1024];
   va_list args;
@@ -1242,7 +1370,7 @@ static void error_at(Parser *parser, const char *message) {
     // nothing for now
     break;
   case TOKEN_EOF:
-    fprintf(stderr, " at end\n");
+    fprintf(stderr, " at end");
     break;
   default:
     fprintf(stderr, " at '%.*s'", token.length, token.start);
@@ -1256,6 +1384,7 @@ static void error_at(Parser *parser, const char *message) {
 static Chunk *current_chunk(Compiler *compiler) {
   return &compiler->func->chunk;
 }
+
 
 /**/
 
@@ -1277,6 +1406,10 @@ static bool check(Compiler *compiler, TokenType type) {
 
 static bool is_global(int32_t local_index) {
   return local_index == LOCALS_NOT_FOUND;
+}
+
+static bool was_local_found(int32_t local_index) {
+  return local_index != LOCALS_NOT_FOUND;
 }
 
 /**/

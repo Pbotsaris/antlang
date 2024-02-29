@@ -32,7 +32,10 @@ static void init_local_stack(LocalStack *stack) {
    Local *local = &stack->locals[0];
    local->name.start  = "";
    local->name.length = 0;
-   local->depth = 0;
+
+   /* this slot of for function and be part of the compiler:end_scope logc 
+    * so we set the depth to -1 so functions or script don't get pop in end_scope */
+   local->depth = -1; 
 
    stack->count = 1;
    stack->depth = 0;
@@ -42,7 +45,7 @@ static void push_local_stack(LocalStack *stack, Token name){
    Local *local = &stack->locals[stack->count];
    local->name  = name;
    // we must manually mark the local as initialized
-   local->depth = LOCALS_UNINITIALIZED; 
+   local->depth = LOCALS_NOT_INTIALIZED; 
 
    stack->count++;
 }
@@ -65,7 +68,7 @@ static bool validate_scope(LocalStack *stack, Token *name){
 
       Local *local = &stack->locals[i];
 
-      if(local->depth != LOCALS_UNINITIALIZED && local->depth < stack->depth){
+      if(local->depth != LOCALS_NOT_INTIALIZED && local->depth < stack->depth){
          break;
       }
 
@@ -86,8 +89,8 @@ static int32_t resolve_local(LocalStack *stack, Token *name){
      
       if(token_compare(&local->name, name)){
 
-         if(local->depth == LOCALS_UNINITIALIZED){
-            return LOCALS_UNINITIALIZED;
+         if(local->depth == LOCALS_NOT_INTIALIZED){
+            return LOCALS_NOT_INTIALIZED;
          }
 
          return  i;
@@ -103,7 +106,7 @@ static void mark_initialized(LocalStack *stack){
 
 static int32_t print_local_name(LocalStack *stack, int32_t index){
 
-   if(index == LOCALS_NOT_FOUND || index == LOCALS_UNINITIALIZED || index > stack->count - 1){
+   if(index == LOCALS_NOT_FOUND || index == LOCALS_NOT_INTIALIZED || index > stack->count - 1){
       return printf("Local{ N/A }");
    }
 

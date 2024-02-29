@@ -1,0 +1,12 @@
+fn outer() {
+   let a = 10;
+
+   fn inner() {
+      print a;
+   }
+
+   return inner;
+}
+
+let i = outer();
+print i();

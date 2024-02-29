@@ -8,8 +8,12 @@
 #include "strings.h"
 #include "value_array.h"
 #include "functions.h"
+#include "closure.h"
 #include "natives.h"
 #include "var_mapping.h"
+#include "upvalues.h"
+#include "stack.h"
+
 #include "debug.h"
 #include <stdarg.h>
 #include <stdio.h>
@@ -73,8 +77,8 @@ static InterpretResult interpret(VM *vm, const char *source) {
   STACK_PUSH(VALUE_FROM_OBJECT(FUNCTION_AS_OBJECT(main_func)));
   STACK_POP(); // push pop silliness for the GC
                
-  ObjectClosure *closure = ant_function.new_closure(main_func);
-  STACK_PUSH(VALUE_FROM_OBJECT(FUNCTION_CLOSURE_AS_OBJECT(closure)));
+  ObjectClosure *closure = ant_closure.new(main_func);
+  STACK_PUSH(VALUE_FROM_OBJECT(CLOSURE_AS_OBJECT(closure)));
 
   call(vm, closure, 0);
   return run(vm);
@@ -102,6 +106,9 @@ static void repl(VM *vm) {
       break;
     }
 
+
+    // FIX ME: this is a hack to reset the compiler state. look into a better way to do this
+    ant_compiler.init(&vm->compiler, COMPILATION_TYPE_SCRIPT);
     interpret(vm, line);
     printf("\n");
   }
@@ -220,23 +227,73 @@ static InterpretResult run(VM *vm) {
       break;
    }
 
+
+   case OP_SET_UPVALUE: {
+      uint8_t slot = READ_CHUNK_BYTE();
+      *frame->closure->upvalues[slot]->location = STACK_PEEK(0);
+      break;
+   }
+
+
+   case OP_GET_UPVALUE: {
+      /* the operand is the index into the current function's upvalue array */
+      uint8_t slot = READ_CHUNK_BYTE();
+      STACK_PUSH(*frame->closure->upvalues[slot]->location);
+      break;
+   }
+
+
+#define CAPTURE_UPVALUES(closure, frame)                                                                \
+                                                                                                        \
+    /* the compiler emits closure->upvalue_count number of */                                           \
+    /* [is_local, index] pairs to the chunk after constants operand. */                                 \
+    /* reading the upvalues from the chunk below */                                                     \
+                                                                                                        \
+    for (int32_t i = 0; i < closure->upvalue_count; i++) {                                              \
+                                                                                                        \
+        /* NOTE: OP_CLOSURE is emitted during function declaration, so at this point of the */          \
+        /* execution, the CallFrame is at the enclosing function of the function being declared. */     \
+                                                                                                        \
+        uint8_t is_local = READ_CHUNK_BYTE();                                                           \
+        uint8_t index = READ_CHUNK_BYTE();                                                              \
+                                                                                                        \
+        /* the upvalue closes over a local variable in the enclosing function (the current frame) */    \
+        /* we capture the local variable based on the relative index */                                 \
+        /* provided by the closure instruction. */                                                      \
+                                                                                                        \
+        if (is_local) {                                                                                 \
+            closure->upvalues[i] = ant_upvalues.capture(frame->slots + index);                          \
+            continue;                                                                                   \
+        }                                                                                               \
+        /* Upvalue is not local (to the enclosing function of the function being declared), */          \
+        /* This means the upvalue was captured someplace, grab it from the parent closure. */           \
+                                                                                                        \
+        closure->upvalues[i] = frame->closure->upvalues[index];                                         \
+    }
+
    case OP_CLOSURE: {
 
       /* closures are like special case constant, the same but with some pre-processing 
        * before pushing it to the stack 
        * */
+
       ObjectFunction *func = FUNCTION_FROM_VALUE(READ_CHUNK_CONSTANT());
-      ObjectClosure *closure = ant_function.new_closure(func);
-      STACK_PUSH(VALUE_FROM_OBJECT(FUNCTION_CLOSURE_AS_OBJECT(closure)));
+      ObjectClosure *closure = ant_closure.new(func);
+      STACK_PUSH(VALUE_FROM_OBJECT(CLOSURE_AS_OBJECT(closure)));
+      CAPTURE_UPVALUES(closure, frame);
+
       break;
    }
 
   case OP_CLOSURE_LONG: {
       ObjectFunction *func = FUNCTION_FROM_VALUE(READ_CHUNK_LONG_CONSTANT());
-      ObjectClosure *closure = ant_function.new_closure(func);
-      STACK_PUSH(VALUE_FROM_OBJECT(FUNCTION_CLOSURE_AS_OBJECT(closure)));
+      ObjectClosure *closure = ant_closure.new(func);
+      STACK_PUSH(VALUE_FROM_OBJECT(CLOSURE_AS_OBJECT(closure)));
+      CAPTURE_UPVALUES(closure, frame);
       break;
    }
+
+#undef CAPTURE_UPVALUES
 
     case OP_RETURN:{
          Value result = STACK_POP();
@@ -502,10 +559,8 @@ static bool call_value(VM *vm, Value callee, int32_t arg_count) {
             return false;
 
          case OBJ_CLOSURE: 
-            return call(vm, FUNCTION_CLOSURE_FROM_VALUE(callee), arg_count);
+            return call(vm, CLOSURE_FROM_VALUE(callee), arg_count);
             
-
-
          case OBJ_NATIVE:{
             ObjectNative *native = ant_native.from_value(callee);
             Value result         = native->func(arg_count, STACK_TOP() - arg_count);

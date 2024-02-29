@@ -21,22 +21,30 @@ typedef enum {
   OP_LESS,               /* no operand */
   OP_PRINT,              /* no operand */
   OP_POP,                /* no operand */
-  OP_CLOSURE,            /*  8-bit operand */
-  OP_CLOSURE_LONG,       /* 24-bit operand */
+
+  OP_CLOSURE,            /*  8-bit operand  + a pair of bytes per upvalue in func->upvalue_count */
+  OP_CLOSURE_LONG,       /*  24-bit operand + a pair of bytes per upvalue in func->upvalue_count */
+
   OP_CALL,               /* 8-bit operand  */
   OP_JUMP,               /* 16-bit operand */
   OP_JUMP_IF_FALSE,      /* 16-bit operand */
   OP_LOOP,               /* 16-bit operand */
+
+  OP_SET_UPVALUE,        /*  no operand */
+  OP_GET_UPVALUE,        /*  no operand */
+
   OP_DEFINE_GLOBAL,      /* 8-bit operand  */
   OP_DEFINE_GLOBAL_LONG, /* 24-bit operand */
   OP_GET_GLOBAL,         /* 8-bit operand  */
   OP_GET_GLOBAL_LONG,    /* 24-bit operand */
   OP_SET_GLOBAL,         /* 8-bit operand  */
   OP_SET_GLOBAL_LONG,    /* 24-bit operand */
+
   OP_SET_LOCAL,          /* 8-bit operand  */
   OP_SET_LOCAL_LONG,     /* 24-bit operand */
   OP_GET_LOCAL,          /* 8-bit operand  */
   OP_GET_LOCAL_LONG,     /* 24-bit operand */
+
   OP_CONSTANT,           /* 8-bit operand  */
   OP_CONSTANT_LONG,      /* 24-bit operand */
 } OpCode;
@@ -95,6 +103,8 @@ typedef struct AntChunk {
   bool (*write_set_global)    (Chunk *chunk, int32_t global_index, int32_t line);
   bool (*write_get_local)     (Chunk *chunk, int32_t local_index, int32_t line);
   bool (*write_set_local)     (Chunk *chunk, int32_t local_index, int32_t line);
+  bool (*write_get_upvalue)   (Chunk *chunk, int32_t upvalue_index, int32_t line);
+  bool (*write_set_upvalue)   (Chunk *chunk, int32_t upvalue_index, int32_t line);
 } AntChunkAPI;
 
 extern AntChunkAPI ant_chunk;

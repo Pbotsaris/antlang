@@ -1,0 +1,11 @@
+fn outer() {
+  let x = "outside";
+
+  fn inner() {
+    print x;
+  }
+
+  inner();
+}
+
+outer();

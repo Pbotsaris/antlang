@@ -1,0 +1,9 @@
+fn outer(){
+   fn inner(){
+      print "hi";
+   }
+
+   inner();
+}
+
+outer();

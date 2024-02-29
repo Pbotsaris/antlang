@@ -5,10 +5,11 @@
 #include "value.h"
 
 typedef enum {
-  OBJ_STRING = 0,
+  OBJ_STRING =   0,
   OBJ_FUNCTION = 1,
-  OBJ_CLOSURE = 2,
-  OBJ_NATIVE = 3,
+  OBJ_CLOSURE =  2,
+  OBJ_NATIVE =   3,
+  OBJ_UPVALUE =  4,
 } ObjectType;
 
 struct Object {
@@ -32,6 +33,7 @@ typedef struct ObjectAPI {
 #define OBJECT_IS_STRING(value)     (OBJECT_IS_TYPE((value), OBJ_STRING))
 #define OBJECT_IS_FUNCTION(value)   (OBJECT_IS_TYPE((value), OBJ_FUNCTION))
 #define OBJECT_IS_CLOSURE(value)    (OBJECT_IS_TYPE((value), OBJ_CLOSURE))
+#define OBJECT_IS_UPVALUE(value)    (OBJECT_IS_TYPE((value), OBJ_UPVALUE))
 #define OBJECT_IS_NATIVE(value)     (OBJECT_IS_TYPE((value), OBJ_NATIVE))
 
 extern ObjectAPI ant_object;

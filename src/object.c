@@ -2,6 +2,7 @@
 #include "memory.h"
 #include "functions.h"
 #include "natives.h"
+#include "closure.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -72,7 +73,10 @@ static int32_t print_object(Value value, bool debug) {
     return printf("<native fn>");
 
    case OBJ_CLOSURE:
-    return ant_function.print(ant_function.closure_from_value(value)->func);
+    return ant_function.print(ant_closure.from_value(value)->func);
+
+   case OBJ_UPVALUE:
+    return printf("Upvalue");
 
   default:
     fprintf(stderr, "Error: Attempted to print object of unkown type.\n");
@@ -105,8 +109,14 @@ static void free_object(Object *object) {
 
    case OBJ_CLOSURE: {
     ObjectClosure* closure = (ObjectClosure*)object;
+    FREE_ARRAY(ObjectUpvalue*, closure->upvalues, closure->upvalue_count);
     FREE(ObjectClosure, closure);
     break;
+   }
+
+   case OBJ_UPVALUE: {
+   FREE(ObjectUpvalue, (ObjectUpvalue*)object);
+   break;
    }
 
    default:

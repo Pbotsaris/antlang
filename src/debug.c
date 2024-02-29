@@ -28,6 +28,7 @@ static int32_t print_instruction(const char *name, int32_t offset);
 static int32_t print_byte_instruction(const char *name, Chunk *frame_chunk, int32_t offset);
 static int32_t print_jump_instruction(const char *name, Chunk *frame_chunk, int32_t sign, int32_t offset);
 static int32_t print_constant_instruction(const char *name, Chunk *frame_chunk, int32_t offset);
+static int32_t print_closure_instruction(const char *name, Chunk *frame_chunk, int32_t offset);
 static int32_t print_global_instruction(const char *name, Chunk *frame_chunk, int offset);
 static int32_t print_local_instruction(const char *name, Compiler *compiler, Chunk *frame_chunk, int offset);
 
@@ -163,8 +164,16 @@ static int32_t disassemble_instruction(Compiler *compiler, Chunk *frame_chunk, i
     return print_byte_instruction("OP_CALL", frame_chunk, offset);
 
    case OP_CLOSURE:
-    offset++;
-    return print_constant_instruction("OP_CLOSURE", frame_chunk, offset);
+    return print_closure_instruction("OP_CLOSURE", frame_chunk, offset);
+
+   case OP_CLOSURE_LONG:
+    return print_closure_instruction("OP_CLOSURE", frame_chunk, offset);
+
+   case OP_SET_UPVALUE:
+    return print_byte_instruction("OP_SET_UPVALUE", frame_chunk, offset);
+
+   case OP_GET_UPVALUE:
+    return print_byte_instruction("OP_GET_UPVALUE", frame_chunk, offset);
 
   case OP_DEFINE_GLOBAL:
     return print_global_instruction("OP_DEFINE_GLOBAL", frame_chunk, offset);
@@ -259,7 +268,6 @@ static int32_t print_global_instruction(const char *name, Chunk *frame_chunk, in
 /* */
 
 static int32_t print_local_instruction(const char *name, Compiler *compiler, Chunk *frame_chunk, int32_t offset) {
-
   int32_t local_index = unpack_bitecode_operand(frame_chunk, &offset);
 
   int32_t print_len = printf("%-16s %4d:", name, local_index);
@@ -290,6 +298,41 @@ static int print_constant_instruction(const char *name, Chunk *frame_chunk, int 
 
 /* */
 
+int32_t print_closure_instruction(const char *name, Chunk *frame_chunk, int32_t offset) {
+  int32_t const_index = unpack_bitecode_operand(frame_chunk, &offset);
+  int32_t print_len = printf("%-16s %4d:", name, const_index);
+
+  if (const_index >= frame_chunk->constants.count) {
+    print_len += printf("Unknown constant index '%d'", const_index);
+    align_print(print_len);
+    return offset;
+  }
+
+  Value closure_val = frame_chunk->constants.values[const_index];
+  print_len        += ant_value.print(closure_val, true);
+  print_len        += printf("\n");
+   
+  ObjectFunction *closure = FUNCTION_FROM_VALUE(closure_val);
+
+  for(int32_t i = 0; i < closure->upvalue_count; i++){
+     int32_t isLocal = frame_chunk->code[offset++];
+     int32_t index   = frame_chunk->code[offset++];
+     // note that this move the stack print to all the way to the bottom
+     if(i == closure->upvalue_count - 1){
+     print_len += printf("%4d    |   %s %d", offset - 2, isLocal ? "local" : "upvalue", index);
+
+     } else {
+     print_len += printf("%4d    |   %s %d\n", offset - 2, isLocal ? "local" : "upvalue", index);
+     }
+
+  }
+
+  align_print(print_len);
+  return offset;
+}
+
+/* */
+
 static int32_t unpack_bitecode_operand(Chunk *chunk, int *offset) {
   int32_t const_index = 0;
   int32_t operand_offset = 0;
@@ -314,7 +357,8 @@ static int32_t unpack_bitecode_operand(Chunk *chunk, int *offset) {
 static bool is_long_constant(uint8_t opcode) {
   return opcode == OP_CONSTANT_LONG || opcode == OP_DEFINE_GLOBAL_LONG ||
          opcode == OP_GET_GLOBAL_LONG || opcode == OP_SET_GLOBAL_LONG ||
-         opcode == OP_GET_LOCAL_LONG || opcode == OP_SET_LOCAL_LONG;
+         opcode == OP_GET_LOCAL_LONG || opcode == OP_SET_LOCAL_LONG || 
+         opcode == OP_CLOSURE_LONG;
 }
 
 
