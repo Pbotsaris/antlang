@@ -1,0 +1,1 @@
+break src/upvalues.c:new_upvalue_runtime_object

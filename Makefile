@@ -8,7 +8,7 @@ BASE_CFLAGS=-W -Wall -Wextra -Iinclude
 # Debug 
 DEBUG_CFLAGS=$(BASE_CFLAGS) -g3 -DDEBUG_TRACE_EXECUTION -DDEBUG_PRINT_CODE
 DEBUG_VERBOSE_CFLAGS=$(DEBUG_CFLAGS) -DDEBUG_TRACE_PARSER -DDEBUG_TRACE_PARSER_VERBOSE 
-DEBUG_LDFLAGS=-fsanitize=address
+DEBUG_LDFLAGS=-fsanitize=address,undefined -fno-omit-frame-pointer
 
 # Release
 RELEASE_CFLAGS=$(BASE_CFLAGS) -O2
@@ -31,6 +31,10 @@ debug: CFLAGS=$(DEBUG_CFLAGS)
 debug: LDFLAGS=$(DEBUG_LDFLAGS)
 debug: $(TARGET_DEBUG)
 
+debug-silent: CFLAGS=$(BASE_CFLAGS) -g3
+debug-silent: LDFLAGS=$(DEBUG_LDFLAGS)
+debug-silent: $(TARGET_DEBUG)
+
 debug-verbose: CFLAGS=$(DEBUG_VERBOSE_CFLAGS)
 debug-verbose: LDFLAGS=$(DEBUG_LDFLAGS)
 debug-verbose: $(TARGET_DEBUG)
@@ -38,7 +42,7 @@ debug-verbose: $(TARGET_DEBUG)
 
 valgrind: CFLAGS=$(BASE_CFLAGS)
 valgrind: $(VALGRIND_TARGET)
-	valgrind --leak-check=full --show-leak-kinds=all --track-origins=yes ./$(VALGRIND_TARGET) $(ARGS)
+	valgrind --leak-check=full --expensive-definedness-checks=yes  --show-leak-kinds=all --track-origins=yes ./$(VALGRIND_TARGET) $(ARGS)
 
 valgrind-gdb: $(VALGRIND_TARGET)
 	valgrind --leak-check=full --show-leak-kinds=all --track-origins=yes --vgdb=yes --vgdb-error=0 ./$(VALGRIND_TARGET) $(ARGS)

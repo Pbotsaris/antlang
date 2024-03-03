@@ -280,7 +280,20 @@ static InterpretResult run(VM *vm) {
       ObjectFunction *func = FUNCTION_FROM_VALUE(READ_CHUNK_CONSTANT());
       ObjectClosure *closure = ant_closure.new(func);
       STACK_PUSH(VALUE_FROM_OBJECT(CLOSURE_AS_OBJECT(closure)));
-      CAPTURE_UPVALUES(closure, frame);
+
+                                                                                                       \
+    for (int32_t i = 0; i < closure->upvalue_count; i++) {                                              \
+                                                                                                        \
+        uint8_t is_local = READ_CHUNK_BYTE();                                                           \
+        uint8_t index = READ_CHUNK_BYTE();                                                              \
+                                                                                                        \
+        if (is_local) {                                                                                 \
+            closure->upvalues[i] = ant_upvalues.capture(frame->slots + index);                          \
+            continue;                                                                                   \
+        }                                                                                               \
+                                                                                                        \
+        closure->upvalues[i] = frame->closure->upvalues[index];                                         \
+    }
       break;
    }
 

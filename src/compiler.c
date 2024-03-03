@@ -1241,9 +1241,6 @@ static void emit_closure(Compiler *compiler, Compiler *func_compiler, ObjectFunc
 
   for(int32_t i = 0; i < func->upvalue_count; i++){
      Upvalue upvalue =  func_compiler->upvalues.values[i];
-
-     printf("Upvalue index: %d, is_local: %d, for line: %d\n", upvalue.index, upvalue.is_local, line);
-
      ant_chunk.write(current_chunk(compiler), upvalue.is_local ? 1 : 0, line);
      ant_chunk.write(current_chunk(compiler), upvalue.index, line);
   }

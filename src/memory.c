@@ -37,8 +37,10 @@ static void *reallocate(void *pointer, size_t old_size, size_t new_size) {
   return ptr;
 }
 
+#include <stdio.h>
 static Object* add_object(Object *object) {
    /* add to the front  */
+
    object->next = garbage.objects;
    garbage.objects = object;
    return object;
@@ -47,11 +49,13 @@ static Object* add_object(Object *object) {
 static void free_objects(){
    Object *head = garbage.objects;
 
+
    while (head != NULL) {
       Object *next = head->next;
       ant_object.free(head);
       head = next;
    }
+
    garbage.objects = NULL;
 }
 

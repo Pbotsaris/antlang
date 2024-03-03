@@ -7,8 +7,8 @@
 /* Runtime object */
 
 typedef struct {
-   Object *object;
-   Value *location; // reference to a variable
+   Object object;
+   Value *location; // reference to a variable 
 }ObjectUpvalue;
 
 #define UPVALUE_AS_OBJECT(upvalue) ((Object*)(upvalue))

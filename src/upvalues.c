@@ -1,5 +1,6 @@
 #include "upvalues.h"
 #include <stdio.h>
+#include <stddef.h> 
 
 static void init_upvalues(Upvalues *upvalues, ObjectFunction *func);
 static ObjectUpvalue* new_upvalue_runtime_object(Value *slot);

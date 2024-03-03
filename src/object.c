@@ -58,6 +58,8 @@ static bool is_object_type(Value value, ObjectType type) {
 static Object *allocate_object(size_t size, ObjectType object_type) {
   Object *object = (Object *)ant_memory.realloc(NULL, 0, size);
 
+printf("Allocated object of type %d at %p, size %zu\n", object_type, (void*)object, size);
+
   if (object == NULL) {
     fprintf(stderr, "Error: Could not allocate memory for object.\n");
     return NULL;
