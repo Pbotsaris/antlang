@@ -1,8 +1,8 @@
 #include "object.h"
-#include "memory.h"
-#include "functions.h"
-#include "natives.h"
 #include "closure.h"
+#include "functions.h"
+#include "memory.h"
+#include "natives.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -41,9 +41,13 @@ static ObjectType get_type(Value value) {
 /* */
 
 static bool is_string(Value value) { return is_object_type(value, OBJ_STRING); }
-static bool is_function(Value value) { return is_object_type(value, OBJ_FUNCTION); }
+static bool is_function(Value value) {
+  return is_object_type(value, OBJ_FUNCTION);
+}
 static bool is_native(Value value) { return is_object_type(value, OBJ_NATIVE); }
-static bool is_closure(Value value) { return is_object_type(value, OBJ_CLOSURE); }
+static bool is_closure(Value value) {
+  return is_object_type(value, OBJ_CLOSURE);
+}
 
 /* */
 
@@ -53,6 +57,12 @@ static bool is_object_type(Value value, ObjectType type) {
 
 static Object *allocate_object(size_t size, ObjectType object_type) {
   Object *object = (Object *)ant_memory.realloc(NULL, 0, size);
+
+  if (object == NULL) {
+    fprintf(stderr, "Error: Could not allocate memory for object.\n");
+    return NULL;
+  }
+
   object->type = object_type;
 
   return ant_memory.add_object(object);
@@ -66,16 +76,16 @@ static int32_t print_object(Value value, bool debug) {
   case OBJ_STRING:
     return ant_string.print(ant_string.from_value(value), debug);
 
-   case OBJ_FUNCTION:
+  case OBJ_FUNCTION:
     return ant_function.print(ant_function.from_value(value));
 
-   case OBJ_NATIVE:
+  case OBJ_NATIVE:
     return printf("<native fn>");
 
-   case OBJ_CLOSURE:
+  case OBJ_CLOSURE:
     return ant_function.print(ant_closure.from_value(value)->func);
 
-   case OBJ_UPVALUE:
+  case OBJ_UPVALUE:
     return printf("Upvalue");
 
   default:
@@ -88,39 +98,44 @@ static void free_object(Object *object) {
 
   switch (object->type) {
   case OBJ_STRING: {
-   ObjectString* string = (ObjectString*)object;
-   FREE_ARRAY(char, string->chars, string->length + 1);
-   FREE(ObjectString, string);
-   break;
+    ObjectString *string = (ObjectString *)object;
+    FREE_ARRAY(char, string->chars, string->length + 1);
+    FREE(ObjectString, string);
+    break;
   }
 
-   case OBJ_FUNCTION:{
-    ObjectFunction* func = (ObjectFunction*)object;
+  case OBJ_FUNCTION: {
+    ObjectFunction *func = (ObjectFunction *)object;
     ant_chunk.free(&func->chunk);
     FREE(ObjectFunction, func);
     break;
   }
 
-   case OBJ_NATIVE: {
-    ObjectNative* native = (ObjectNative*)object;
+  case OBJ_NATIVE: {
+    ObjectNative *native = (ObjectNative *)object;
     FREE(ObjectNative, native);
     break;
-   }
+  }
 
-   case OBJ_CLOSURE: {
-    ObjectClosure* closure = (ObjectClosure*)object;
-    FREE_ARRAY(ObjectUpvalue*, closure->upvalues, closure->upvalue_count);
+  case OBJ_CLOSURE: {
+    ObjectClosure *closure = (ObjectClosure *)object;
+
+    if (closure->upvalues != NULL) {
+      FREE_ARRAY(ObjectUpvalue *, closure->upvalues, closure->upvalue_count);
+    }
     FREE(ObjectClosure, closure);
     break;
-   }
+  }
 
-   case OBJ_UPVALUE: {
-   FREE(ObjectUpvalue, (ObjectUpvalue*)object);
-   break;
-   }
+  case OBJ_UPVALUE: {
+    ObjectUpvalue *upvalue = (ObjectUpvalue *)object;
+    FREE(ObjectUpvalue, upvalue);
+    break;
+  }
 
-   default:
-   fprintf(stderr, "Error: Attempted to free object of unkown type: %d\n", object->type);
-    break; 
+  default:
+    fprintf(stderr, "Error: Attempted to free object of unkown type: %d\n",
+            object->type);
+    break;
   }
 }

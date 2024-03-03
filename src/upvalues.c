@@ -19,7 +19,7 @@ static void init_upvalues(Upvalues *upvalues, ObjectFunction *func){
 
 static ObjectUpvalue* new_upvalue_runtime_object(Value *slot){
    ObjectUpvalue *upvalue = (ObjectUpvalue*)ant_object.allocate(sizeof(ObjectUpvalue), OBJ_UPVALUE);
-
+   upvalue->location = slot;
    return upvalue;
 }
 

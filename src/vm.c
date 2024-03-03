@@ -281,7 +281,6 @@ static InterpretResult run(VM *vm) {
       ObjectClosure *closure = ant_closure.new(func);
       STACK_PUSH(VALUE_FROM_OBJECT(CLOSURE_AS_OBJECT(closure)));
       CAPTURE_UPVALUES(closure, frame);
-
       break;
    }
 

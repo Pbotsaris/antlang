@@ -68,6 +68,7 @@ static bool validate_scope(LocalStack *stack, Token *name){
 
       Local *local = &stack->locals[i];
 
+      // loops backwards, break we find a local that is not initialized or is in a lower scope
       if(local->depth != LOCALS_NOT_INTIALIZED && local->depth < stack->depth){
          break;
       }

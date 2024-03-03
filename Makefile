@@ -2,13 +2,15 @@ SRC=src
 OBJ=obj
 BIN=bin
 
-# Base compilation flags (include paths, warnings)
+# Base
 BASE_CFLAGS=-W -Wall -Wextra -Iinclude
-# Debug flags
+
+# Debug 
 DEBUG_CFLAGS=$(BASE_CFLAGS) -g3 -DDEBUG_TRACE_EXECUTION -DDEBUG_PRINT_CODE
 DEBUG_VERBOSE_CFLAGS=$(DEBUG_CFLAGS) -DDEBUG_TRACE_PARSER -DDEBUG_TRACE_PARSER_VERBOSE 
 DEBUG_LDFLAGS=-fsanitize=address
-# Release (optimization) flags
+
+# Release
 RELEASE_CFLAGS=$(BASE_CFLAGS) -O2
 
 CC=clang
@@ -33,6 +35,8 @@ debug-verbose: CFLAGS=$(DEBUG_VERBOSE_CFLAGS)
 debug-verbose: LDFLAGS=$(DEBUG_LDFLAGS)
 debug-verbose: $(TARGET_DEBUG)
 
+
+valgrind: CFLAGS=$(BASE_CFLAGS)
 valgrind: $(VALGRIND_TARGET)
 	valgrind --leak-check=full --show-leak-kinds=all --track-origins=yes ./$(VALGRIND_TARGET) $(ARGS)
 

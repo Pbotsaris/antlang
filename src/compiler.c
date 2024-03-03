@@ -726,8 +726,10 @@ static void unary(Compiler *compiler, bool _) {
 
   case TOKEN_MINUS:
     emit_byte(compiler, OP_NEGATE);
+    break;
   case TOKEN_PLUS:
     emit_byte(compiler, OP_POSITIVE);
+    break;
   case TOKEN_BANG:
     emit_byte(compiler, OP_NOT);
     break;
@@ -1006,7 +1008,9 @@ static VarResolution resolve_variable_scope(Compiler *compiler, Token *name, int
     return VAR_RESOLVES_UPVALUE;
   }
 
-  // should I make a global? I don't think so!  if didn't resolve.. it's an error
+  /* Note the globals resolves at runtime. For now we add it to the mapping. 
+   * If it hasn't been declared variable will error at runtime
+   * */
   *var_index = make_global_identifier(compiler, name);
   return VAR_RESOLVES_GLOBAL;
 }
@@ -1029,7 +1033,7 @@ int32_t resolve_upvalue(Compiler *compiler, Token *name) {
 
    // found it
   if(was_local_found(local)){
-     return report_on_error(compiler, ant_upvalues.add(&compiler->enclosing->upvalues, (uint8_t)local, true));
+     return report_on_error(compiler, ant_upvalues.add(&compiler->upvalues, (uint8_t)local, true));
   }
 
   /* recursively look for upvalues in the enclosing function */
