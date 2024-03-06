@@ -3,8 +3,7 @@
 #include "scanner.h"
 #include "parser.h"
 #include "locals.h"
-#include "upvalues.h"
-#include "common.h"
+#include "compilation_upvalues.h"
 
 typedef enum {
   PREC_NONE       = 0,  /* Lowest precedence */
@@ -31,7 +30,7 @@ typedef struct Compiler {
   Scanner scanner;
   Parser parser;
   LocalStack locals;
-  Upvalues upvalues;
+  CompilerUpvalues upvalues;
   ObjectFunction *func;
   CompilationType type;
   struct Compiler *enclosing;

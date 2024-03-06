@@ -4,7 +4,7 @@
 #include "strings.h"
 #include "var_mapping.h"
 #include "debug.h"
-
+#include "common.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdarg.h>
@@ -210,7 +210,6 @@ static const char *precedence_name(Presedence presedence);
 static bool match(Compiler *compiler, TokenType type);
 static bool check(Compiler *compiler, TokenType type);
 static ParseRule *get_rule(TokenType type);
-static bool is_global(int32_t local_index);
 static bool was_local_found(int32_t local_index);
 
 /* Compiler API */
@@ -223,7 +222,7 @@ static void init_compiler(Compiler *compiler, CompilationType type) {
   ant_parser.init(&compiler->parser);
   ant_locals.init(&compiler->locals);
   compiler->func = ant_function.new();
-  ant_upvalues.init(&compiler->upvalues, compiler->func);
+  ant_compiler_upvalues.init(&compiler->upvalues, compiler->func);
 }
 
 /**/
@@ -1033,7 +1032,7 @@ int32_t resolve_upvalue(Compiler *compiler, Token *name) {
 
    // found it
   if(was_local_found(local)){
-     return report_on_error(compiler, ant_upvalues.add(&compiler->upvalues, (uint8_t)local, true));
+     return report_on_error(compiler, ant_compiler_upvalues.add(&compiler->upvalues, (uint8_t)local, true));
   }
 
   /* recursively look for upvalues in the enclosing function */
@@ -1045,7 +1044,7 @@ int32_t resolve_upvalue(Compiler *compiler, Token *name) {
    * */
 
   if(was_local_found(upvalue)){
-     return report_on_error(compiler, ant_upvalues.add(&compiler->upvalues, (uint8_t)upvalue, false));
+     return report_on_error(compiler, ant_compiler_upvalues.add(&compiler->upvalues, (uint8_t)upvalue, false));
   }
 
   return LOCALS_NOT_FOUND;
@@ -1240,7 +1239,7 @@ static void emit_closure(Compiler *compiler, Compiler *func_compiler, ObjectFunc
   }
 
   for(int32_t i = 0; i < func->upvalue_count; i++){
-     Upvalue upvalue =  func_compiler->upvalues.values[i];
+     CompilerUpvalue upvalue =  func_compiler->upvalues.values[i];
      ant_chunk.write(current_chunk(compiler), upvalue.is_local ? 1 : 0, line);
      ant_chunk.write(current_chunk(compiler), upvalue.index, line);
   }
@@ -1403,10 +1402,6 @@ static bool match(Compiler *compiler, TokenType type) {
 
 static bool check(Compiler *compiler, TokenType type) {
   return compiler->parser.current.type == type;
-}
-
-static bool is_global(int32_t local_index) {
-  return local_index == LOCALS_NOT_FOUND;
 }
 
 static bool was_local_found(int32_t local_index) {
