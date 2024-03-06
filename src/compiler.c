@@ -13,8 +13,8 @@
 #endif
 
 #define TRACE_PARSER_ENTER(fmt, ...)
-#define TRACE_PARSER_TOKEN(prev, current)
 #define TRACE_PARSER_EXIT()
+#define TRACE_PARSER_TOKEN(prev, current)
 
 #ifdef DEBUG_TRACE_PARSER
 static int32_t trace_depth = 0;
@@ -1032,6 +1032,7 @@ int32_t resolve_upvalue(Compiler *compiler, Token *name) {
 
    // found it
   if(was_local_found(local)){
+     ant_locals.mark_captured(&compiler->enclosing->locals, local); // mark local when captured
      return report_on_error(compiler, ant_compiler_upvalues.add(&compiler->upvalues, (uint8_t)local, true));
   }
 
@@ -1120,11 +1121,22 @@ static void end_scope(Compiler *compiler) {
 
   LocalStack *stack = &compiler->locals;
 
-  // clean up locals that are no longer in scope
-  // when we reach current stack->depth, we stop
+  /* clean up locals that are no longer in scope
+   * if local was captured, we close the upvalue instead
+   * when we reach current stack->depth, we stop
+   */
+
   while (stack->count > 0 &&
-         stack->locals[stack->count - 1].depth == stack->depth) {
-    emit_byte(compiler, OP_POP);
+          ant_locals.top(stack).depth == stack->depth) {
+
+     if(ant_locals.top(stack).is_captured){
+        emit_byte(compiler, OP_CLOSE_UPVALUE);
+
+     } else {
+       emit_byte(compiler, OP_POP);
+
+     }
+
     stack->count--;
   }
 }

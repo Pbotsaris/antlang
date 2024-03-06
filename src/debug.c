@@ -172,6 +172,9 @@ static int32_t disassemble_instruction(Compiler *compiler, Chunk *frame_chunk, i
    case OP_SET_UPVALUE:
     return print_byte_instruction("OP_SET_UPVALUE", frame_chunk, offset);
 
+   case OP_CLOSE_UPVALUE:
+    return print_instruction("OP_CLOSE_UPVALUE", offset);
+
    case OP_GET_UPVALUE:
     return print_byte_instruction("OP_GET_UPVALUE", frame_chunk, offset);
 

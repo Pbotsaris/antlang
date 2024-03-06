@@ -20,6 +20,7 @@ typedef enum {
 typedef struct {
    Token name;
    int32_t depth; // how deep in the stack the variable is
+   bool is_captured;
 }Local;
 
 typedef struct {
@@ -32,13 +33,15 @@ typedef struct {
 typedef struct {
    void        (*init)             (LocalStack* stack);
    void        (*push)             (LocalStack* stack, Token name);
+   Local       (*top)              (LocalStack* stack);
    bool        (*validate_scope)   (LocalStack* stack, Token *name);
    ScopeType   (*current_scope)    (LocalStack* stack);
    void        (*mark_initialized) (LocalStack* stack);
+   void        (*mark_captured)    (LocalStack* stack, int32_t local_index);
    void        (*clear_scope)      (LocalStack* stack, ClearCallback callback);
    int32_t     (*resolve)          (LocalStack* stack, Token *name);
    int32_t     (*resolve_upvalue)  (LocalStack* stack, Token *name);
-   int32_t     (*print)            (LocalStack* stack, int32_t index);
+   int32_t     (*print)            (LocalStack* stack, int32_t local_index);
 }LocalStackAPI;
 
 const extern LocalStackAPI ant_locals;

@@ -5,17 +5,32 @@
 #include "functions.h"
 #include "config.h"
 
-/* This file references the upvalues data structure used by the compiler to keep
- * track of the upvalues in index positions in the VM stack. when the compiler finds
- * a variable being referenced in a function, it will look for the variable in the
- * enclosing functions and if it finds it, it will add it to the upvalues list of the
- * function being compiled. 
+/* 
+ * This file defines the data structures and APIs for managing upvalues during
+ * compilation in the AntLang interpreter. Upvalues are variables from enclosing (outer)
+ * function scopes that are referenced within a nested (inner) function. This mechanism
+ * allows nested functions to access and modify variables from their outer scope, enabling
+ * the implementation of closures.
  *
- * When the compilation is done, the enclosing compiler will emit the upvalues via OP_CLOSURE
- * instruction. 
+ * Overview:
+ * - The `CompilerUpvalue` structure represents a single upvalue with its index in the VM stack
+ *   and a flag indicating if it is a local variable of the enclosing function.
+ * - The `CompilerUpvalues` structure maintains a list of such upvalues, alongside a reference
+ *   to the function being compiled. This is crucial as the `upvalue_count` is stored within
+ *   the function object and must be accessible at runtime for correct closure behavior.
  *
- * Do not confuse this with the upvalue struct used by VM.
- * */
+ * The process:
+ * During compilation, when a variable referenced in a function is identified as belonging to an
+ * enclosing scope, it is added to the current function's upvalue list. This list is then utilized
+ * when emitting the `OP_CLOSURE` instruction, which finalizes the function object with correct
+ * access to its upvalues.
+ *
+ * Note:
+ * This upvalue management for the compiler should not be confused with the runtime upvalue
+ * structures used by the VM. Although related in concept, they serve different purposes within
+ * the interpreter's architecture.
+ *
+ */
 
 #define UPVALUE_REACHED_MAX -3
 #define UPVALUE_NOT_INITIALIZED -4

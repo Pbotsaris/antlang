@@ -30,8 +30,9 @@ typedef enum {
   OP_JUMP_IF_FALSE,      /* 16-bit operand */
   OP_LOOP,               /* 16-bit operand */
 
-  OP_SET_UPVALUE,        /*  no operand */
-  OP_GET_UPVALUE,        /*  no operand */
+  OP_SET_UPVALUE,        /*  8-bit operand */
+  OP_GET_UPVALUE,        /*  8-bit operand */
+  OP_CLOSE_UPVALUE,      /*  no operand */
 
   OP_DEFINE_GLOBAL,      /* 8-bit operand  */
   OP_DEFINE_GLOBAL_LONG, /* 24-bit operand */
