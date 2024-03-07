@@ -4,17 +4,21 @@
 
 /* ObjectUpvalues refers the the upvalue used at runtime by the VM. */
 
-typedef struct {
+typedef struct ObjectUpvalue {
    Object object;
    Value *location; // reference to a variable 
+   Value closed; // value of the variable when the upvalue was created
+   struct ObjectUpvalue *next; // linked list of open upvalues for closures sharing the same upvalue
+   
 }ObjectUpvalue;
 
 #define UPVALUE_AS_OBJECT(upvalue) ((Object*)(upvalue))
 #define UPVALUE_FROM_VALUE(value) ((ObjectUpvalue*)VALUE_AS_OBJECT(value))
 
 typedef struct {
-   ObjectUpvalue* (*new_object)(Value *slot);
-   ObjectUpvalue* (*capture)(Value *slot);
+   ObjectUpvalue* (*new)(Value *slot);
+   ObjectUpvalue* (*capture)(ObjectUpvalue *head, Value *stack_slot);
+   void           (*close) (ObjectUpvalue *head, Value *stack_slot);
 }UpvalueAPI;
 
 const extern UpvalueAPI ant_upvalues;

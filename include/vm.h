@@ -3,6 +3,7 @@
 
 #include "compiler.h"
 #include "config.h"
+#include "upvalues.h"
 
 typedef enum {
    INTERPRET_OK,
@@ -13,16 +14,16 @@ typedef enum {
 
 typedef struct {
    ObjectClosure*  closure;  /* All functions are closures */
-   Value*          slots; /* first slot of the call frame */
-   uint8_t*        ip;    /* return address */
+   Value*          slots;    /* first slot of the call frame */
+   uint8_t*        ip;       /* return address */
 }CallFrame;
 
 typedef struct VM{
-  // Stack       stack;
-   Compiler    compiler;            
-   ValueArray  globals;
-   CallFrame   frames[OPTION_FRAMES_MAX];
-   int32_t     frame_count;
+   Compiler       compiler;            
+   ValueArray     globals;
+   ObjectUpvalue* open_upvalues;
+   CallFrame      frames[OPTION_FRAMES_MAX];
+   int32_t        frame_count;
 }VM;
 
 typedef struct VM_API{
