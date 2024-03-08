@@ -56,8 +56,8 @@ static VM *new_vm() {
   ant_value_array.init_undefined(&vm->globals);
   ant_native.register_all(vm);
 
-  vm->open_upvalues = NULL;
-  vm->frame_count   = 0;
+  vm->open_upvalues.head = NULL;
+  vm->frame_count        = 0;
   return vm;
 }
 
@@ -245,7 +245,7 @@ static InterpretResult run(VM *vm) {
 
    case OP_CLOSE_UPVALUE: {
       /* note that this instruction at the end of a block scope */
-      ant_upvalues.close(vm->open_upvalues, STACK_TOP() - 1);
+      ant_upvalues.close(&vm->open_upvalues, STACK_TOP() - 1);
       STACK_POP();
       break;
    }
@@ -270,7 +270,7 @@ static InterpretResult run(VM *vm) {
         /* provided by the closure instruction. */                                                      \
                                                                                                         \
         if (is_local) {                                                                                 \
-            closure->upvalues[i] = ant_upvalues.capture(vm->open_upvalues, &frame->slots[index]);                          \
+            closure->upvalues[i] = ant_upvalues.capture(&vm->open_upvalues, &frame->slots[index]);                          \
             continue;                                                                                   \
         }                                                                                               \
         /* Upvalue is not local (to the enclosing function of the function being declared), */          \
@@ -308,7 +308,7 @@ static InterpretResult run(VM *vm) {
          Value result = STACK_POP();
 
          /* close upvalues for the function when it returns */
-         ant_upvalues.close(vm->open_upvalues, frame->slots);
+         ant_upvalues.close(&vm->open_upvalues, frame->slots);
          vm->frame_count--;
          
       /* script main function */

@@ -21,7 +21,7 @@ typedef struct {
 typedef struct VM{
    Compiler       compiler;            
    ValueArray     globals;
-   ObjectUpvalue* open_upvalues;
+   UpvalueList    open_upvalues;
    CallFrame      frames[OPTION_FRAMES_MAX];
    int32_t        frame_count;
 }VM;

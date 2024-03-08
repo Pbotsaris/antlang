@@ -12,13 +12,17 @@ typedef struct ObjectUpvalue {
    
 }ObjectUpvalue;
 
+typedef struct  {
+   ObjectUpvalue *head;
+}UpvalueList;
+
 #define UPVALUE_AS_OBJECT(upvalue) ((Object*)(upvalue))
 #define UPVALUE_FROM_VALUE(value) ((ObjectUpvalue*)VALUE_AS_OBJECT(value))
 
 typedef struct {
    ObjectUpvalue* (*new)(Value *slot);
-   ObjectUpvalue* (*capture)(ObjectUpvalue *head, Value *stack_slot);
-   void           (*close) (ObjectUpvalue *head, Value *stack_slot);
+   ObjectUpvalue* (*capture)(UpvalueList *open_upvalues, Value *stack_slot);
+   void           (*close) (UpvalueList *open_upvalues, Value *stack_slot);
 }UpvalueAPI;
 
 const extern UpvalueAPI ant_upvalues;
